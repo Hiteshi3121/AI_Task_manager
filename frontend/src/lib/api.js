@@ -1,4 +1,4 @@
-const BASE = '/api'
+const BASE = (import.meta.env.VITE_API_URL || '') + '/api'
 
 // ---------- Tasks ----------
 
@@ -89,7 +89,7 @@ export async function fetchCalendarStatus() {
 }
 
 export function openCalendarAuth() {
-  window.location.href = '/api/calendar/authorize'
+  window.location.href = (import.meta.env.VITE_API_URL || '') + '/api/calendar/authorize'
 }
 
 export async function disconnectCalendar() {
