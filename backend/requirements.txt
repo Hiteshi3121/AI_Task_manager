@@ -1,0 +1,10 @@
+fastapi==0.111.0
+groq>=1.4.0
+psycopg[binary]==3.1.19
+pydantic==2.7.1
+python-dotenv==1.0.1
+requests>=2.34.2
+uvicorn[standard]==0.29.0
+google-auth>=2.29.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.130.0
