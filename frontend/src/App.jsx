@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
-import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics } from './lib/api'
+import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics } from './lib/api'
 
 const BUCKETS = [
   { id: 'udukku',         label: 'Udukku',                            color: '#185FA5', bg: '#E6F1FB' },
@@ -225,17 +225,38 @@ function StudentRow({ student, onUpdate }) {
 }
 
 // ---------- Bucket board ----------
-// Hoisted out of App: defining a component inside another component's body
-// recreates its function identity on every render, which makes React treat
-// it as a brand-new component type and remount the subtree — that's what
-// was causing the student-name input to lose focus after every keystroke.
-function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent }) {
+function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel }) {
   const placement = GRID_PLACEMENT[bucket.id]
+  const [editingLabel, setEditingLabel] = useState(false)
+  const [labelDraft, setLabelDraft] = useState(customLabel || bucket.label)
+
+  function saveLabel() {
+    setEditingLabel(false)
+    const val = labelDraft.trim() || bucket.label
+    setLabelDraft(val)
+    onSaveLabel(bucket.id, val)
+  }
+
   return (
     <div style={{ ...card, gridColumn: placement.column, gridRow: placement.row, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ padding: '8px 12px', background: bucket.bg + '55', borderBottom: '1px solid #e5e5e5', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600, color: bucket.color, flex: 1 }}>{bucket.label}</span>
-        <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: bucket.bg, color: bucket.color }}>{bTasks.length}</span>
+      <div style={{ padding: '9px 12px', background: bucket.bg, borderBottom: `1px solid ${bucket.color}33`, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        {editingLabel ? (
+          <input
+            autoFocus
+            value={labelDraft}
+            onChange={e => setLabelDraft(e.target.value)}
+            onBlur={saveLabel}
+            onKeyDown={e => { if (e.key === 'Enter') saveLabel(); if (e.key === 'Escape') { setLabelDraft(customLabel || bucket.label); setEditingLabel(false) } }}
+            style={{ flex: 1, fontSize: 12.5, fontWeight: 700, border: 'none', borderBottom: `1px solid ${bucket.color}`, outline: 'none', background: 'transparent', color: bucket.color, padding: '0 2px' }}
+          />
+        ) : (
+          <span
+            onClick={() => setEditingLabel(true)}
+            title="Click to rename"
+            style={{ fontSize: 12.5, fontWeight: 700, color: bucket.color, flex: 1, cursor: 'text' }}
+          >{customLabel || bucket.label}</span>
+        )}
+        <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: bucket.color + '22', color: bucket.color }}>{bTasks.length}</span>
       </div>
 
       <div style={{ padding: 8, overflowY: 'auto', flex: 1 }}>
@@ -285,6 +306,12 @@ export default function App() {
   const [calendarConnected, setCalendarConnected] = useState(false)
   const [analytics, setAnalytics] = useState(null)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const [bucketLabels, setBucketLabels] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('bucketLabels') || '{}') } catch { return {} }
+  })
+  const [newPersonName, setNewPersonName] = useState('')
+  const [newPersonRole, setNewPersonRole] = useState('')
+  const [addingPerson, setAddingPerson] = useState(false)
   const recognitionRef = useRef(null)
   const isMobile = windowWidth < 768
 
@@ -463,6 +490,36 @@ export default function App() {
     }
   }
 
+  function handleSaveBucketLabel(bucketId, label) {
+    const updated = { ...bucketLabels, [bucketId]: label }
+    setBucketLabels(updated)
+    localStorage.setItem('bucketLabels', JSON.stringify(updated))
+  }
+
+  async function handleAddPerson() {
+    if (!newPersonName.trim()) return
+    setAddingPerson(true)
+    try {
+      const person = await createPerson(newPersonName.trim(), newPersonRole.trim())
+      setPeople(prev => [...prev, person])
+      setNewPersonName('')
+      setNewPersonRole('')
+    } catch (e) {
+      setError('Could not add person.')
+    } finally {
+      setAddingPerson(false)
+    }
+  }
+
+  async function handleDeletePerson(id) {
+    try {
+      await deletePerson(id)
+      setPeople(prev => prev.filter(p => p.id !== id))
+    } catch (e) {
+      setError('Could not remove person.')
+    }
+  }
+
   const PRIORITY_RANK = { high: 0, medium: 1, low: 2 }
   const openTasksByBucket = (bucketId) => tasks
     .filter(t => t.bucket_id === bucketId && !t.done)
@@ -473,6 +530,7 @@ export default function App() {
     onUpdateRecurrence: handleUpdateRecurrence, onUpdateTitle: handleUpdateTitle,
     onUpdateStudent: handleUpdateStudent,
     newStudentName, setNewStudentName, addingStudent, onAddStudent: handleAddStudent,
+    onSaveLabel: handleSaveBucketLabel, customLabel: undefined,
   }
 
   return (
@@ -532,38 +590,37 @@ export default function App() {
               <button onClick={handleMicClick} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer', background: isRecording ? '#E24B4A' : '#f0f0f0', color: isRecording ? 'white' : '#666', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: isRecording ? 'pulse 1.2s infinite' : 'none' }}>🎤</button>
               <button onClick={handleAdd} disabled={loading || !input.trim()} style={{ flexShrink: 0, padding: '6px 12px', fontSize: 12, borderRadius: 8, border: 'none', background: loading ? '#aaa' : '#185FA5', color: 'white', cursor: loading ? 'default' : 'pointer' }}>{loading ? '…' : 'Send'}</button>
             </div>
-            {/* Buckets stacked vertically — only show non-empty ones first */}
             {BUCKETS.map(b => (
-              <BucketBoard key={b.id} bucket={b} bTasks={openTasksByBucket(b.id)} {...boardProps} />
+              <BucketBoard key={b.id} bucket={b} bTasks={openTasksByBucket(b.id)} {...boardProps} customLabel={bucketLabels[b.id]} />
             ))}
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gridAutoRows: 'minmax(150px, calc((100vh - 230px) / 3))', gap: 12 }}>
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'udukku')} bTasks={openTasksByBucket('udukku')} {...boardProps} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'ascend_social')} bTasks={openTasksByBucket('ascend_social')} {...boardProps} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'ascend_classes')} bTasks={openTasksByBucket('ascend_classes')} {...boardProps} />
+            <BucketBoard bucket={BUCKETS.find(b => b.id === 'udukku')} bTasks={openTasksByBucket('udukku')} {...boardProps} customLabel={bucketLabels['udukku']} />
+            <BucketBoard bucket={BUCKETS.find(b => b.id === 'ascend_social')} bTasks={openTasksByBucket('ascend_social')} {...boardProps} customLabel={bucketLabels['ascend_social']} />
+            <BucketBoard bucket={BUCKETS.find(b => b.id === 'ascend_classes')} bTasks={openTasksByBucket('ascend_classes')} {...boardProps} customLabel={bucketLabels['ascend_classes']} />
 
-            <div style={{ ...card, gridColumn: 2, gridRow: 2, border: '1px solid #185FA5', padding: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <span style={{ fontSize: 18 }}>✨</span>
-              <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ background: '#EBF3FC', gridColumn: 2, gridRow: 2, border: '1.5px solid #185FA5', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>✨</span>
+              <div style={{ width: '100%', background: 'white', borderRadius: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 1px 4px rgba(24,95,165,0.10)' }}>
                 <input
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
                   placeholder={isRecording ? 'Listening…' : 'Drop a task, a thought, anything...'}
-                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, textAlign: 'center' }}
+                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, textAlign: 'center', background: 'transparent' }}
                 />
                 <button onClick={handleMicClick} title={isRecording ? 'Stop recording' : 'Speak a task'} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer', background: isRecording ? '#E24B4A' : '#f0f0f0', color: isRecording ? 'white' : '#666', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: isRecording ? 'pulse 1.2s infinite' : 'none' }}>🎤</button>
               </div>
-              <button onClick={handleAdd} disabled={loading || !input.trim()} style={{ padding: '6px 16px', fontSize: 12.5, borderRadius: 8, border: 'none', background: loading ? '#aaa' : '#185FA5', color: 'white', cursor: loading ? 'default' : 'pointer' }}>
+              <button onClick={handleAdd} disabled={loading || !input.trim()} style={{ padding: '7px 20px', fontSize: 12.5, borderRadius: 8, border: 'none', background: loading ? '#aaa' : '#185FA5', color: 'white', cursor: loading ? 'default' : 'pointer', fontWeight: 600 }}>
                 {loading ? 'Classifying…' : 'Send'}
               </button>
             </div>
 
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'social_brand')} bTasks={openTasksByBucket('social_brand')} {...boardProps} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'music')} bTasks={openTasksByBucket('music')} {...boardProps} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'fitness')} bTasks={openTasksByBucket('fitness')} {...boardProps} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'personal')} bTasks={openTasksByBucket('personal')} {...boardProps} />
+            <BucketBoard bucket={BUCKETS.find(b => b.id === 'social_brand')} bTasks={openTasksByBucket('social_brand')} {...boardProps} customLabel={bucketLabels['social_brand']} />
+            <BucketBoard bucket={BUCKETS.find(b => b.id === 'music')} bTasks={openTasksByBucket('music')} {...boardProps} customLabel={bucketLabels['music']} />
+            <BucketBoard bucket={BUCKETS.find(b => b.id === 'fitness')} bTasks={openTasksByBucket('fitness')} {...boardProps} customLabel={bucketLabels['fitness']} />
+            <BucketBoard bucket={BUCKETS.find(b => b.id === 'personal')} bTasks={openTasksByBucket('personal')} {...boardProps} customLabel={bucketLabels['personal']} />
           </div>
         )
       )}
@@ -654,21 +711,48 @@ export default function App() {
       {/* ---------- People ---------- */}
       {tab === 'people' && (
         <div>
+          {/* Add person form */}
+          <div style={{ ...card, padding: '12px 16px', marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#555', marginRight: 4 }}>+ Add person</span>
+            <input
+              value={newPersonName}
+              onChange={e => setNewPersonName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddPerson() }}
+              placeholder="Name"
+              style={{ fontSize: 12, padding: '5px 9px', border: '1px solid #e5e5e5', borderRadius: 7, outline: 'none', width: 140 }}
+            />
+            <input
+              value={newPersonRole}
+              onChange={e => setNewPersonRole(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleAddPerson() }}
+              placeholder="Role (optional)"
+              style={{ fontSize: 12, padding: '5px 9px', border: '1px solid #e5e5e5', borderRadius: 7, outline: 'none', width: 160 }}
+            />
+            <button onClick={handleAddPerson} disabled={addingPerson || !newPersonName.trim()} style={{ fontSize: 12, padding: '5px 14px', borderRadius: 7, border: 'none', background: '#185FA5', color: 'white', cursor: 'pointer', fontWeight: 600 }}>Add</button>
+          </div>
+
           {people.length === 0 ? (
-            <p style={{ fontSize: 13, color: '#999' }}>No one's been mentioned in a task yet. Once you type something like "follow up with Tanvi...", she'll show up here.</p>
+            <p style={{ fontSize: 13, color: '#999' }}>No one added yet. Add people above or mention them in a task — they'll appear automatically.</p>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
               {people.map(person => (
                 <div key={person.id} style={{ ...card, padding: '14px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f0f0f0', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{person.name[0]}</div>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{person.name}</p>
                       {person.role && <p style={{ margin: 0, fontSize: 11, color: '#888' }}>{person.role}</p>}
                     </div>
+                    <button
+                      onClick={() => handleDeletePerson(person.id)}
+                      title="Remove person"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#ccc', padding: 2 }}
+                    >✕</button>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {person.tasks.map(task => (
+                    {person.tasks.length === 0
+                      ? <p style={{ fontSize: 11, color: '#bbb' }}>No tasks yet</p>
+                      : person.tasks.map(task => (
                       <button
                         key={task.id}
                         onClick={() => setExpandedTask(task)}
@@ -732,10 +816,10 @@ export default function App() {
                 { label: 'Open tasks', value: analytics.by_bucket.reduce((s, b) => s + b.open, 0), sub: 'across all buckets', color: '#185FA5' },
                 { label: 'Total tasks ever', value: analytics.by_bucket.reduce((s, b) => s + b.total, 0), sub: `${analytics.by_bucket.reduce((s, b) => s + b.done, 0)} completed`, color: '#555' },
               ].map((kpi, i) => (
-                <div key={i} style={{ ...card, padding: '14px 16px' }}>
-                  <p style={{ margin: '0 0 4px', fontSize: 11, color: '#888' }}>{kpi.label}</p>
-                  <p style={{ margin: '0 0 2px', fontSize: 28, fontWeight: 700, color: '#222' }}>{kpi.value}</p>
-                  <p style={{ margin: 0, fontSize: 11, color: kpi.color }}>{kpi.sub}</p>
+                <div key={i} style={{ ...card, padding: '16px 18px' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: 12, color: '#888', fontWeight: 500 }}>{kpi.label}</p>
+                  <p style={{ margin: '0 0 2px', fontSize: 34, fontWeight: 700, color: '#222' }}>{kpi.value}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: kpi.color, fontWeight: 500 }}>{kpi.sub}</p>
                 </div>
               ))}
             </div>
@@ -754,8 +838,8 @@ export default function App() {
             )}
 
             {/* Daily completions bar chart */}
-            <div style={{ ...card, padding: '14px 16px' }}>
-              <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600 }}>📈 Daily activity (last 30 days)</p>
+            <div style={{ ...card, padding: '16px 18px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>📈 Daily activity (last 30 days)</p>
               {dailyData.length === 0 ? (
                 <p style={{ fontSize: 12, color: '#999' }}>No history yet — data appears from the second day onward.</p>
               ) : (
@@ -773,33 +857,44 @@ export default function App() {
 
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.4fr 1fr', gap: 16 }}>
               {/* Bucket breakdown */}
-              <div style={{ ...card, padding: '14px 16px' }}>
-                <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600 }}>🗂 Tasks by bucket</p>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={bucketData} layout="vertical" barSize={12} barGap={2}>
-                    <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={72} />
-                    <Tooltip contentStyle={{ fontSize: 12 }} />
+              <div style={{ ...card, padding: '16px 18px' }}>
+                <p style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>🗂 Tasks by bucket</p>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={bucketData} layout="vertical" barSize={14} barGap={2}>
+                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
+                    <Tooltip contentStyle={{ fontSize: 13 }} />
                     <Bar dataKey="Done" stackId="a" radius={[0,0,0,0]}>
                       {bucketData.map((b, i) => <Cell key={i} fill={b.color} />)}
                     </Bar>
-                    <Bar dataKey="Open" stackId="a" fill="#e5e5e5" radius={[0,3,3,0]} />
+                    <Bar dataKey="Open" stackId="a" fill="#e5e5e5" radius={[0,4,4,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
 
               {/* Priority breakdown of open tasks */}
-              <div style={{ ...card, padding: '14px 16px' }}>
-                <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600 }}>🎯 Open tasks by priority</p>
+              <div style={{ ...card, padding: '16px 18px' }}>
+                <p style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>🎯 Open tasks by priority</p>
                 {priorityData.length === 0 ? (
-                  <p style={{ fontSize: 12, color: '#999' }}>No open tasks.</p>
+                  <p style={{ fontSize: 13, color: '#999' }}>No open tasks.</p>
                 ) : (
-                  <ResponsiveContainer width="100%" height={200}>
+                  <ResponsiveContainer width="100%" height={260}>
                     <PieChart>
-                      <Pie data={priorityData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`} labelLine={false} fontSize={11}>
+                      <Pie
+                        data={priorityData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%" cy="50%"
+                        outerRadius={95}
+                        innerRadius={40}
+                        label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
+                        labelLine={true}
+                        fontSize={12}
+                      >
                         {priorityData.map((p, i) => <Cell key={i} fill={p.color} />)}
                       </Pie>
-                      <Tooltip contentStyle={{ fontSize: 12 }} />
+                      <Tooltip contentStyle={{ fontSize: 13 }} />
+                      <Legend wrapperStyle={{ fontSize: 13 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}

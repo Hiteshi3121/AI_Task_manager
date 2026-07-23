@@ -80,6 +80,21 @@ export async function fetchPeople() {
   return r.json()
 }
 
+export async function createPerson(name, role = '') {
+  const r = await fetch(`${BASE}/people/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, role }),
+  })
+  if (!r.ok) throw new Error('Failed to add person')
+  return r.json()
+}
+
+export async function deletePerson(id) {
+  const r = await fetch(`${BASE}/people/${id}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error('Failed to remove person')
+}
+
 // ---------- Calendar ----------
 
 export async function fetchCalendarStatus() {

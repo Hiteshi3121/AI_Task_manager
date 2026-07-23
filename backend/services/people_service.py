@@ -50,3 +50,26 @@ def list_people_with_tasks() -> list[dict]:
         )
 
     return list(people.values())
+
+
+def create_person(name: str, role: str) -> dict:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "insert into people (name, role) values (%s, %s) returning id, name, role",
+                (name, role or None)
+            )
+            row = cur.fetchone()
+            conn.commit()
+    return {"id": row["id"], "name": row["name"], "role": row["role"], "tasks": []}
+
+
+def delete_person(person_id: int) -> bool:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # unlink tasks first so we don't violate FK constraint
+            cur.execute("update tasks set person_id = null where person_id = %s", (person_id,))
+            cur.execute("delete from people where id = %s", (person_id,))
+            deleted = cur.rowcount
+            conn.commit()
+    return deleted > 0
