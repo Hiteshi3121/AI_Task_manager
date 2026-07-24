@@ -615,7 +615,7 @@ export default function App() {
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         * { box-sizing: border-box; }
-        html { zoom: 1.25; }
+        html { zoom: 1.10; }
       `}</style>
 
       {/* Header */}
