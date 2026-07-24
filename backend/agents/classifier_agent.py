@@ -63,7 +63,7 @@ Task: "{raw_text}"
 
 Return a JSON object with exactly these keys:
 {{
-  "title": "4-8 word clean action-oriented version of the task",
+  "title": "if the raw task is under 15 words, keep it as-is but fix spelling and grammar; otherwise write a 15-20 word clean action-oriented summary",
   "bucket_id": one of the bucket ids above,
   "sub_bucket_id": one of the sub-bucket ids above, or null if bucket_id is not "udukku",
   "person_name": the matching team member's exact name if the task mentions one of them, else null,
