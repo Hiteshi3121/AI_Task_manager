@@ -90,6 +90,16 @@ export async function createPerson(name, role = '') {
   return r.json()
 }
 
+export async function updatePerson(id, patch) {
+  const r = await fetch(`${BASE}/people/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+  if (!r.ok) throw new Error('Failed to update person')
+  return r.json()
+}
+
 export async function deletePerson(id) {
   const r = await fetch(`${BASE}/people/${id}`, { method: 'DELETE' })
   if (!r.ok) throw new Error('Failed to remove person')
@@ -141,11 +151,11 @@ export async function transcribeAudio(blob) {
   return r.json()
 }
 
-export async function createManualTask(bucketId, title) {
+export async function createManualTask(bucketId, title, personId = null) {
   const r = await fetch(`${BASE}/tasks/manual`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bucket_id: bucketId, title }),
+    body: JSON.stringify({ bucket_id: bucketId, title, person_id: personId }),
   })
   if (!r.ok) throw new Error('Failed to create task')
   return r.json()

@@ -126,17 +126,17 @@ def create_task(raw_text: str) -> dict:
             return cur.fetchone()
 
 
-def create_manual_task(bucket_id: str, title: str) -> dict:
+def create_manual_task(bucket_id: str, title: str, person_id: int | None = None) -> dict:
     """Insert a task directly into a bucket without AI classification."""
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                insert into tasks (raw_text, title, bucket_id, priority, due)
-                values (%s, %s, %s, 'medium', 'upcoming')
+                insert into tasks (raw_text, title, bucket_id, person_id, priority, due)
+                values (%s, %s, %s, %s, 'medium', 'upcoming')
                 returning *
                 """,
-                (title, title, bucket_id),
+                (title, title, bucket_id, person_id),
             )
             conn.commit()
             return cur.fetchone()

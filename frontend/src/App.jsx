@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
-import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB } from './lib/api'
+import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, updatePerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB } from './lib/api'
 
 const BUCKETS = [
   { id: 'udukku',         label: 'Udukku',                            color: '#185FA5', bg: '#E6F1FB' },
@@ -87,12 +87,11 @@ function XIcon({ size = 16 }) {
 }
 
 // ---------- Task card ----------
-// Due label sits inline before the title (instead of on its own line below)
-// so vertical space isn't spent on a near-empty second row.
-function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onUpdateTitle }) {
+function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateTitle, bucketId, people, assignee, onUpdateAssignee }) {
   const [pickingDate, setPickingDate] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState(task.title)
+  const [editingAssignee, setEditingAssignee] = useState(false)
   const isOverdue = task.due === 'overdue'
   const isCustom = task.due === 'custom'
   const daysOpen = Math.floor((Date.now() - new Date(task.created_at)) / 86400000)
@@ -120,6 +119,9 @@ function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onU
     setPickingDate(false)
     if (value) onUpdateDue(task.id, 'custom', new Date(value).toISOString())
   }
+
+  const currentAssignee = assignee || 'Ishita'
+  const peopleNames = ['Ishita', ...(people || []).map(p => p.name).filter(n => n !== 'Ishita')]
 
   return (
     <div style={{ padding: '7px 9px', background: isStaleOverdue ? '#fff8f8' : '#fafafa', borderRadius: 8, marginBottom: 6, borderLeft: `3px solid ${isStaleOverdue ? '#E24B4A' : PRIORITY_COLOR[task.priority]}`, outline: isStaleOverdue ? '1px solid #fcc' : 'none' }}>
@@ -152,46 +154,55 @@ function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onU
             defaultValue={toDatetimeLocalValue(task.due_date)}
             onBlur={handleDateConfirm}
             onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
-            style={{ fontSize: 10, padding: '1px 4px', borderRadius: 6, border: '1px solid #ccc', flexShrink: 0 }}
+            style={{ fontSize: 9.5, padding: '1px 2px', borderRadius: 6, border: '1px solid #ccc', flexShrink: 0, maxWidth: 120 }}
           />
         ) : isCustom ? (
           <button
             onClick={() => setPickingDate(true)}
             title="Click to change the date"
             style={{
-              fontSize: 9.5, fontWeight: 600, padding: '1px 6px', borderRadius: 10, flexShrink: 0, border: 'none', cursor: 'pointer',
-              color: isOverdue ? '#A32D2D' : '#0C447C', background: isOverdue ? '#FCEBEB' : '#E6F1FB',
+              fontSize: 9, fontWeight: 600, padding: '1px 5px', borderRadius: 10, flexShrink: 0, border: 'none', cursor: 'pointer',
+              color: isOverdue ? '#A32D2D' : '#0C447C', background: isOverdue ? '#FCEBEB' : '#E6F1FB', whiteSpace: 'nowrap',
             }}
           >{task.due_date ? formatDueDate(task.due_date) : 'custom'}</button>
         ) : (
           <select
             value={task.due}
             onChange={e => handleSelectChange(e.target.value)}
-            title="Click to change the deadline"
+            title="Deadline"
             style={{
-              fontSize: 9.5, fontWeight: 600, padding: '1px 4px', borderRadius: 10, flexShrink: 0, border: 'none', cursor: 'pointer',
+              fontSize: 9, fontWeight: 600, padding: '1px 2px', borderRadius: 10, flexShrink: 0, border: 'none', cursor: 'pointer',
               color: isOverdue ? '#A32D2D' : '#888',
               background: isOverdue ? '#FCEBEB' : '#eee',
+              maxWidth: 72,
             }}
           >
             {DUE_PRESETS.map(d => <option key={d} value={d}>{d}</option>)}
-            <option value="custom">Custom date…</option>
+            <option value="custom">Custom…</option>
           </select>
         )}
 
         <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center' }}>
           {task.calendar_event_id && <span title="Added to Google Calendar" style={{ fontSize: 11 }}>📅</span>}
-          <select
-            value={task.recurrence || ''}
-            onChange={e => onUpdateRecurrence(task.id, e.target.value || null)}
-            title="Set recurrence"
-            style={{ fontSize: 9.5, padding: '1px 3px', borderRadius: 8, border: 'none', cursor: 'pointer', background: task.recurrence ? '#E6F1FB' : '#f0f0f0', color: task.recurrence ? '#185FA5' : '#aaa', fontWeight: task.recurrence ? 600 : 400 }}
-          >
-            <option value="">once</option>
-            <option value="daily">daily</option>
-            <option value="weekly">weekly</option>
-            <option value="monthly">monthly</option>
-          </select>
+          {bucketId === 'udukku' && (
+            editingAssignee ? (
+              <select
+                autoFocus
+                value={currentAssignee}
+                onChange={e => { onUpdateAssignee(task.id, e.target.value); setEditingAssignee(false) }}
+                onBlur={() => setEditingAssignee(false)}
+                style={{ fontSize: 9, padding: '1px 2px', borderRadius: 8, border: '1px solid #185FA5', cursor: 'pointer', background: '#E6F1FB', color: '#185FA5', fontWeight: 600, maxWidth: 70 }}
+              >
+                {peopleNames.map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            ) : (
+              <button
+                onClick={() => setEditingAssignee(true)}
+                title="Assigned to — click to change"
+                style={{ fontSize: 9, padding: '1px 5px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#E6F1FB', color: '#185FA5', fontWeight: 600, maxWidth: 70, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+              >{currentAssignee}</button>
+            )
+          )}
           <button onClick={() => onDone(task.id, task.done)} title="Mark done" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}><CheckIcon /></button>
           <button onClick={() => onDelete(task.id)} title="Delete task" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}><XIcon /></button>
         </div>
@@ -249,8 +260,108 @@ function StudentRow({ student, onUpdate }) {
   )
 }
 
+// ---------- Person card ----------
+function PersonCard({ person, onDelete, onUpdatePerson, onAddTask }) {
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState(person.name)
+  const [editingRole, setEditingRole] = useState(false)
+  const [roleDraft, setRoleDraft] = useState(person.role || '')
+  const [showAddTask, setShowAddTask] = useState(false)
+  const [taskDraft, setTaskDraft] = useState('')
+
+  function saveName() {
+    setEditingName(false)
+    const val = nameDraft.trim() || person.name
+    setNameDraft(val)
+    if (val !== person.name) onUpdatePerson(person.id, { name: val })
+  }
+
+  function saveRole() {
+    setEditingRole(false)
+    const val = roleDraft.trim()
+    if (val !== (person.role || '')) onUpdatePerson(person.id, { role: val })
+  }
+
+  function submitTask() {
+    if (!taskDraft.trim()) return
+    onAddTask(person.id, taskDraft.trim())
+    setTaskDraft('')
+    setShowAddTask(false)
+  }
+
+  const openTasks = (person.tasks || []).filter(t => !t.done)
+  const avatar = person.name[0]?.toUpperCase()
+
+  return (
+    <div style={{ background: 'white', border: '1px solid #e5e5e5', borderRadius: 12, padding: '14px 16px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+        <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#E6F1FB', color: '#185FA5', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{avatar}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {editingName ? (
+            <input
+              autoFocus
+              value={nameDraft}
+              onChange={e => setNameDraft(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameDraft(person.name); setEditingName(false) } }}
+              style={{ fontSize: 13, fontWeight: 600, border: 'none', borderBottom: '1px solid #185FA5', outline: 'none', background: 'transparent', width: '100%', padding: '0 2px' }}
+            />
+          ) : (
+            <p onClick={() => setEditingName(true)} title="Click to edit name" style={{ margin: 0, fontSize: 13, fontWeight: 600, cursor: 'text' }}>{person.name}</p>
+          )}
+          {editingRole ? (
+            <input
+              autoFocus
+              value={roleDraft}
+              onChange={e => setRoleDraft(e.target.value)}
+              onBlur={saveRole}
+              onKeyDown={e => { if (e.key === 'Enter') saveRole(); if (e.key === 'Escape') { setRoleDraft(person.role || ''); setEditingRole(false) } }}
+              placeholder="Add role..."
+              style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #ccc', outline: 'none', background: 'transparent', width: '100%', marginTop: 2, color: '#666', padding: '0 2px' }}
+            />
+          ) : (
+            <p onClick={() => setEditingRole(true)} title="Click to edit role" style={{ margin: '2px 0 0', fontSize: 11, color: '#888', cursor: 'text' }}>{person.role || <span style={{ color: '#ccc' }}>Click to add role</span>}</p>
+          )}
+        </div>
+        <button onClick={() => onDelete(person.id)} title="Remove person" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 15, padding: '0 2px', flexShrink: 0, lineHeight: 1 }}>✕</button>
+      </div>
+
+      {/* Tasks */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {openTasks.length === 0
+          ? <p style={{ fontSize: 11, color: '#bbb', margin: 0 }}>No open tasks</p>
+          : openTasks.map(task => (
+            <div key={task.id} style={{ fontSize: 12, padding: '5px 8px', borderRadius: 6, background: '#fafafa', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <span style={{ color: PRIORITY_COLOR[task.priority] || '#ccc', flexShrink: 0, marginTop: 1 }}>•</span>
+              <span style={{ color: '#333', lineHeight: 1.4 }}>{task.title}</span>
+            </div>
+          ))
+        }
+      </div>
+
+      {/* Add task */}
+      {showAddTask ? (
+        <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
+          <input
+            autoFocus
+            value={taskDraft}
+            onChange={e => setTaskDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submitTask(); if (e.key === 'Escape') { setShowAddTask(false); setTaskDraft('') } }}
+            placeholder="Task title..."
+            style={{ flex: 1, fontSize: 12, padding: '5px 8px', border: '1px solid #185FA5', borderRadius: 6, outline: 'none' }}
+          />
+          <button onClick={submitTask} style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: 'none', background: '#185FA5', color: 'white', cursor: 'pointer', fontWeight: 600 }}>Add</button>
+          <button onClick={() => { setShowAddTask(false); setTaskDraft('') }} style={{ fontSize: 11, padding: '5px 8px', borderRadius: 6, border: 'none', background: '#eee', color: '#666', cursor: 'pointer' }}>✕</button>
+        </div>
+      ) : (
+        <button onClick={() => setShowAddTask(true)} style={{ marginTop: 10, fontSize: 11, padding: '4px 10px', borderRadius: 7, border: '1px dashed #185FA5', background: 'transparent', color: '#185FA5', cursor: 'pointer', fontWeight: 500 }}>+ Add task</button>
+      )}
+    </div>
+  )
+}
+
 // ---------- Bucket board ----------
-function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket }) {
+function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket, people, taskAssignees, onUpdateAssignee }) {
   const placement = GRID_PLACEMENT[bucket.id] || {}
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(customLabel || bucket.label)
@@ -346,7 +457,8 @@ function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, 
         {bTasks.length === 0 ? (
           <p style={{ fontSize: 11, color: '#aaa', textAlign: 'center', padding: '8px 0' }}>Nothing here</p>
         ) : bTasks.map(task => (
-          <TaskCard key={task.id} task={task} onDone={onDone} onDelete={onDelete} onUpdateDue={onUpdateDue} onUpdateRecurrence={onUpdateRecurrence} onUpdateTitle={onUpdateTitle} />
+          <TaskCard key={task.id} task={task} onDone={onDone} onDelete={onDelete} onUpdateDue={onUpdateDue} onUpdateTitle={onUpdateTitle}
+            bucketId={bucket.id} people={people} assignee={taskAssignees?.[task.id]} onUpdateAssignee={onUpdateAssignee} />
         ))}
       </div>
     </div>
@@ -384,6 +496,9 @@ export default function App() {
   })
   const [addingBucket, setAddingBucket] = useState(false)
   const [newBucketName, setNewBucketName] = useState('')
+  const [taskAssignees, setTaskAssignees] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('taskAssignees') || '{}') } catch { return {} }
+  })
   const recognitionRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
@@ -453,6 +568,13 @@ export default function App() {
         }))
         setCustomBuckets(merged)
         localStorage.setItem('customBuckets', JSON.stringify(merged))
+      }
+      // Seed Ishita if she's not in the people list yet
+      if (!p.some(person => person.name === 'Ishita')) {
+        try {
+          const ishita = await createPerson('Ishita', 'Founder')
+          setPeople(prev => [ishita, ...prev])
+        } catch {}
       }
     } catch (e) {
       setError('Could not load dashboard data. Is the backend running?')
@@ -598,7 +720,34 @@ export default function App() {
     }
   }
 
+  async function handleAddPersonTask(personId, title) {
+    try {
+      const task = await createManualTask('udukku', title, personId)
+      setTasks(prev => [task, ...prev])
+      fetchPeople().then(setPeople).catch(() => {})
+    } catch (e) {
+      setError('Could not add task.')
+    }
+  }
+
+  function handleUpdateAssignee(taskId, name) {
+    const updated = { ...taskAssignees, [taskId]: name }
+    setTaskAssignees(updated)
+    localStorage.setItem('taskAssignees', JSON.stringify(updated))
+  }
+
+  async function handleUpdatePerson(id, patch) {
+    try {
+      const updated = await updatePerson(id, patch)
+      setPeople(prev => prev.map(p => p.id === id ? { ...p, ...updated } : p))
+    } catch (e) {
+      setError('Could not update person.')
+    }
+  }
+
   async function handleDeleteBucket(bucketId) {
+    const label = [...BUCKETS, ...customBuckets].find(b => b.id === bucketId)?.label || bucketId
+    if (!window.confirm(`Remove "${label}" bucket? Tasks inside will be kept but unassigned.`)) return
     if (BUCKETS.some(b => b.id === bucketId)) {
       const updated = new Set([...hiddenBuckets, bucketId])
       setHiddenBuckets(updated)
@@ -652,6 +801,8 @@ export default function App() {
   }
 
   async function handleDeletePerson(id) {
+    const person = people.find(p => p.id === id)
+    if (!window.confirm(`Remove ${person?.name || 'this person'} from the People tab? Their tasks will be kept.`)) return
     try {
       await deletePerson(id)
       setPeople(prev => prev.filter(p => p.id !== id))
@@ -667,12 +818,13 @@ export default function App() {
 
   const boardProps = {
     students, onDone: handleDone, onDelete: handleDelete, onUpdateDue: handleUpdateDue,
-    onUpdateRecurrence: handleUpdateRecurrence, onUpdateTitle: handleUpdateTitle,
+    onUpdateTitle: handleUpdateTitle,
     onUpdateStudent: handleUpdateStudent,
     newStudentName, setNewStudentName, addingStudent, onAddStudent: handleAddStudent,
     onSaveLabel: handleSaveBucketLabel, customLabel: undefined,
     onAddManualTask: handleAddManualTask,
     onDeleteBucket: handleDeleteBucket,
+    people, taskAssignees, onUpdateAssignee: handleUpdateAssignee,
   }
 
   return (
@@ -786,12 +938,23 @@ export default function App() {
             </div>
             {!brief ? <p style={{ fontSize: 12, color: '#999' }}>Loading…</p> : brief.what_matters_today.length === 0 ? (
               <p style={{ fontSize: 12, color: '#999' }}>Nothing urgent right now.</p>
-            ) : brief.what_matters_today.map((item, i) => (
-              <p key={i} style={{ fontSize: 12.5, lineHeight: 1.5, margin: '0 0 8px', display: 'flex', gap: 6 }}>
-                <span style={{ color: PRIORITY_COLOR[item.priority] || '#999' }}>•</span>
-                <span>{item.text}</span>
-              </p>
-            ))}
+            ) : (() => {
+              const ALL_BUCKETS = [...BUCKETS, ...([{ id: 'udukku', label: 'Udukku' }])]
+              const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS].map(b => [b.id, b.label]))
+              return brief.what_matters_today.map((item, i) => {
+                const matchedTask = tasks.find(t => !t.done && (t.title === item.text || (item.text && item.text.includes(t.title))))
+                const bucketLabel = matchedTask ? (BUCKET_LABEL_MAP[matchedTask.bucket_id] || matchedTask.bucket_id) : null
+                return (
+                  <p key={i} style={{ fontSize: 12.5, lineHeight: 1.6, margin: '0 0 9px', display: 'flex', gap: 7, alignItems: 'flex-start' }}>
+                    <span style={{ color: PRIORITY_COLOR[item.priority] || '#999', fontSize: 16, lineHeight: 1.2, flexShrink: 0 }}>•</span>
+                    <span>
+                      {bucketLabel && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#185FA5', background: '#E6F1FB', padding: '1px 6px', borderRadius: 8, marginRight: 6, whiteSpace: 'nowrap' }}>{bucketLabel}</span>}
+                      {item.text}
+                    </span>
+                  </p>
+                )
+              })
+            })()}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -883,37 +1046,17 @@ export default function App() {
           </div>
 
           {people.length === 0 ? (
-            <p style={{ fontSize: 13, color: '#999' }}>No one added yet. Add people above or mention them in a task — they'll appear automatically.</p>
+            <p style={{ fontSize: 13, color: '#999' }}>Loading team…</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
               {people.map(person => (
-                <div key={person.id} style={{ ...card, padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f0f0f0', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{person.name[0]}</div>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{person.name}</p>
-                      {person.role && <p style={{ margin: 0, fontSize: 11, color: '#888' }}>{person.role}</p>}
-                    </div>
-                    <button
-                      onClick={() => handleDeletePerson(person.id)}
-                      title="Remove person"
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#ccc', padding: 2 }}
-                    >✕</button>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                    {person.tasks.length === 0
-                      ? <p style={{ fontSize: 11, color: '#bbb' }}>No tasks yet</p>
-                      : person.tasks.map(task => (
-                      <button
-                        key={task.id}
-                        onClick={() => setExpandedTask(task)}
-                        style={{ textAlign: 'left', fontSize: 12, padding: '6px 8px', borderRadius: 6, border: 'none', background: '#fafafa', color: '#185FA5', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: '#cdd9e6' }}
-                      >
-                        {task.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <PersonCard
+                  key={person.id}
+                  person={person}
+                  onDelete={handleDeletePerson}
+                  onUpdatePerson={handleUpdatePerson}
+                  onAddTask={handleAddPersonTask}
+                />
               ))}
             </div>
           )}
