@@ -364,7 +364,7 @@ function PersonCard({ person, onDelete, onUpdatePerson, onAddTask, onDoneTask })
 }
 
 // ---------- Bucket board ----------
-function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket, people, taskAssignees, onUpdateAssignee }) {
+function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket, people, taskAssignees, onUpdateAssignee, onGoToPeople }) {
   const placement = GRID_PLACEMENT[bucket.id] || {}
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(customLabel || bucket.label)
@@ -408,6 +408,13 @@ function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, 
             title="Click to rename"
             style={{ fontSize: 12.5, fontWeight: 700, color: bucket.color, flex: 1, cursor: 'text' }}
           >{customLabel || bucket.label}</span>
+        )}
+        {bucket.id === 'udukku' && onGoToPeople && (
+          <button
+            onClick={onGoToPeople}
+            title="Go to People tab"
+            style={{ fontSize: 10, padding: '2px 7px', borderRadius: 8, border: `1px solid ${bucket.color}55`, background: 'transparent', color: bucket.color, cursor: 'pointer', flexShrink: 0, fontWeight: 600 }}
+          >👥 People</button>
         )}
         <button
           onClick={() => setShowAddManual(v => !v)}
@@ -835,6 +842,7 @@ export default function App() {
     onAddManualTask: handleAddManualTask,
     onDeleteBucket: handleDeleteBucket,
     people, taskAssignees, onUpdateAssignee: handleUpdateAssignee,
+    onGoToPeople: () => setTab('people'),
   }
 
   return (
@@ -926,7 +934,7 @@ export default function App() {
             </div>
 
             {/* Bucket grid — Udukku tall on left, others auto-flow to fill vacant slots */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gridAutoRows: 'minmax(130px, calc((100vh - 310px) / 3))', gridAutoFlow: 'row dense', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gridAutoRows: 'minmax(260px, calc((100vh - 200px) / 3))', gridAutoFlow: 'row dense', gap: 12 }}>
               {BUCKETS.filter(b => !hiddenBuckets.has(b.id)).map(b => (
                 <BucketBoard key={b.id} bucket={b} bTasks={openTasksByBucket(b.id)} {...boardProps} customLabel={bucketLabels[b.id]} />
               ))}
