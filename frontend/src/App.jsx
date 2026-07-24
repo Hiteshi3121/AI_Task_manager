@@ -16,11 +16,11 @@ const BUCKETS = [
 // Udukku is the only bucket spanning two rows — it's the busiest board —
 // which is what leaves exactly one free cell (center, row 2) for capture.
 const GRID_PLACEMENT = {
-  udukku:         { column: 1, row: '1 / span 2' },
+  udukku:         { column: 1, row: '1 / span 3' },
   ascend_social:  { column: 2, row: 1 },
   ascend_classes: { column: 3, row: 1 },
+  music:          { column: 2, row: 2 },
   social_brand:   { column: 3, row: 2 },
-  music:          { column: 1, row: 3 },
   fitness:        { column: 2, row: 3 },
   personal:       { column: 3, row: 3 },
 }
@@ -84,7 +84,7 @@ function CheckIcon({ size = 16 }) {
 function XIcon({ size = 16 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="12" fill="#EF4444"/>
+      <circle cx="12" cy="12" r="12" fill="#F87171"/>
       <line x1="8" y1="8" x2="16" y2="16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
       <line x1="16" y1="8" x2="8" y2="16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
     </svg>
@@ -255,8 +255,8 @@ function StudentRow({ student, onUpdate }) {
 }
 
 // ---------- Bucket board ----------
-function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask }) {
-  const placement = GRID_PLACEMENT[bucket.id]
+function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket }) {
+  const placement = GRID_PLACEMENT[bucket.id] || {}
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(customLabel || bucket.label)
   const [showAddManual, setShowAddManual] = useState(false)
@@ -306,6 +306,11 @@ function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, 
           style={{ fontSize: 10, padding: '2px 7px', borderRadius: 8, border: `1px solid ${bucket.color}55`, background: 'transparent', color: bucket.color, cursor: 'pointer', flexShrink: 0, fontWeight: 600 }}
         >+ Add</button>
         <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: bucket.color + '22', color: bucket.color }}>{bTasks.length}</span>
+        <button
+          onClick={() => onDeleteBucket(bucket.id)}
+          title="Remove bucket"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#bbb', padding: '0 2px', flexShrink: 0, lineHeight: 1 }}
+        >✕</button>
       </div>
 
       <div style={{ padding: 8, overflowY: 'auto', flex: 1 }}>
@@ -376,6 +381,14 @@ export default function App() {
   const [newPersonName, setNewPersonName] = useState('')
   const [newPersonRole, setNewPersonRole] = useState('')
   const [addingPerson, setAddingPerson] = useState(false)
+  const [hiddenBuckets, setHiddenBuckets] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('hiddenBuckets') || '[]')) } catch { return new Set() }
+  })
+  const [customBuckets, setCustomBuckets] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('customBuckets') || '[]') } catch { return [] }
+  })
+  const [addingBucket, setAddingBucket] = useState(false)
+  const [newBucketName, setNewBucketName] = useState('')
   const recognitionRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
@@ -572,6 +585,34 @@ export default function App() {
     }
   }
 
+  function handleDeleteBucket(bucketId) {
+    if (BUCKETS.some(b => b.id === bucketId)) {
+      const updated = new Set([...hiddenBuckets, bucketId])
+      setHiddenBuckets(updated)
+      localStorage.setItem('hiddenBuckets', JSON.stringify([...updated]))
+    } else {
+      const updated = customBuckets.filter(b => b.id !== bucketId)
+      setCustomBuckets(updated)
+      localStorage.setItem('customBuckets', JSON.stringify(updated))
+    }
+  }
+
+  function handleAddBucket() {
+    if (!newBucketName.trim()) return
+    const palette = [
+      { color: '#0D7377', bg: '#E0F7FA' }, { color: '#6B4EAD', bg: '#F3E8FF' },
+      { color: '#B45309', bg: '#FEF3C7' }, { color: '#065F46', bg: '#D1FAE5' },
+      { color: '#6B21A8', bg: '#F5F3FF' },
+    ]
+    const c = palette[customBuckets.length % palette.length]
+    const newBucket = { id: `custom_${Date.now()}`, label: newBucketName.trim(), ...c }
+    const updated = [...customBuckets, newBucket]
+    setCustomBuckets(updated)
+    localStorage.setItem('customBuckets', JSON.stringify(updated))
+    setNewBucketName('')
+    setAddingBucket(false)
+  }
+
   async function handleAddPerson() {
     if (!newPersonName.trim()) return
     setAddingPerson(true)
@@ -608,6 +649,7 @@ export default function App() {
     newStudentName, setNewStudentName, addingStudent, onAddStudent: handleAddStudent,
     onSaveLabel: handleSaveBucketLabel, customLabel: undefined,
     onAddManualTask: handleAddManualTask,
+    onDeleteBucket: handleDeleteBucket,
   }
 
   return (
@@ -673,32 +715,46 @@ export default function App() {
             ))}
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gridAutoRows: 'minmax(150px, calc((100vh - 230px) / 3))', gap: 12 }}>
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'udukku')} bTasks={openTasksByBucket('udukku')} {...boardProps} customLabel={bucketLabels['udukku']} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'ascend_social')} bTasks={openTasksByBucket('ascend_social')} {...boardProps} customLabel={bucketLabels['ascend_social']} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'ascend_classes')} bTasks={openTasksByBucket('ascend_classes')} {...boardProps} customLabel={bucketLabels['ascend_classes']} />
-
-            <div style={{ background: '#EBF3FC', gridColumn: 2, gridRow: 2, border: '1.5px solid #185FA5', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-              <span style={{ fontSize: 20 }}>✨</span>
-              <div style={{ width: '100%', background: 'white', borderRadius: 8, padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 6, boxShadow: '0 1px 4px rgba(24,95,165,0.10)' }}>
-                <input
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
-                  placeholder={isRecording ? 'Listening…' : 'Drop a task, a thought, anything...'}
-                  style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, textAlign: 'center', background: 'transparent' }}
-                />
-                <button onClick={handleMicClick} disabled={transcribing} title={isRecording ? 'Stop recording' : transcribing ? 'Transcribing…' : 'Speak a task'} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: transcribing ? 'default' : 'pointer', background: isRecording ? '#E24B4A' : transcribing ? '#185FA5' : '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: isRecording ? 'pulse 1.2s infinite' : 'none' }}>{transcribing ? <span style={{ fontSize: 10, color: 'white' }}>…</span> : <MicIcon size={13} color={isRecording ? 'white' : '#666'} />}</button>
-              </div>
-              <button onClick={handleAdd} disabled={loading || !input.trim()} style={{ padding: '7px 20px', fontSize: 12.5, borderRadius: 8, border: 'none', background: loading ? '#aaa' : '#185FA5', color: 'white', cursor: loading ? 'default' : 'pointer', fontWeight: 600 }}>
-                {loading ? 'Classifying…' : 'Send'}
-              </button>
+          <div>
+            {/* Capture bar — full width at top */}
+            <div style={{ ...card, border: '1.5px solid #185FA5', padding: '10px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18, flexShrink: 0 }}>✨</span>
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAdd() }}
+                placeholder={isRecording ? 'Listening…' : transcribing ? 'Transcribing…' : 'Drop a task, a thought, anything...'}
+                style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, background: 'transparent' }}
+              />
+              <button onClick={handleMicClick} disabled={transcribing} title={isRecording ? 'Stop' : transcribing ? 'Transcribing…' : 'Speak a task'} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: transcribing ? 'default' : 'pointer', background: isRecording ? '#E24B4A' : transcribing ? '#185FA5' : '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: isRecording ? 'pulse 1.2s infinite' : 'none' }}>{transcribing ? <span style={{ fontSize: 10, color: 'white' }}>…</span> : <MicIcon size={13} color={isRecording ? 'white' : '#666'} />}</button>
+              <button onClick={handleAdd} disabled={loading || !input.trim()} style={{ flexShrink: 0, padding: '7px 18px', fontSize: 13, borderRadius: 8, border: 'none', background: loading ? '#aaa' : '#185FA5', color: 'white', cursor: loading ? 'default' : 'pointer', fontWeight: 600 }}>{loading ? 'Classifying…' : 'Send'}</button>
+              <div style={{ width: 1, height: 24, background: '#e5e5e5', flexShrink: 0 }} />
+              {addingBucket ? (
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                  <input autoFocus value={newBucketName} onChange={e => setNewBucketName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') handleAddBucket(); if (e.key === 'Escape') setAddingBucket(false) }} placeholder="Bucket name..." style={{ fontSize: 12, padding: '5px 9px', border: '1px solid #185FA5', borderRadius: 7, outline: 'none', width: 140 }} />
+                  <button onClick={handleAddBucket} style={{ fontSize: 12, padding: '5px 11px', borderRadius: 7, border: 'none', background: '#185FA5', color: 'white', cursor: 'pointer', fontWeight: 600 }}>Add</button>
+                  <button onClick={() => { setAddingBucket(false); setNewBucketName('') }} style={{ fontSize: 12, padding: '5px 8px', borderRadius: 7, border: 'none', background: '#eee', color: '#666', cursor: 'pointer' }}>✕</button>
+                </div>
+              ) : (
+                <button onClick={() => setAddingBucket(true)} style={{ flexShrink: 0, fontSize: 12, padding: '6px 13px', borderRadius: 7, border: '1px dashed #185FA5', background: 'transparent', color: '#185FA5', cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: 500 }}>+ New Bucket</button>
+              )}
             </div>
 
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'social_brand')} bTasks={openTasksByBucket('social_brand')} {...boardProps} customLabel={bucketLabels['social_brand']} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'music')} bTasks={openTasksByBucket('music')} {...boardProps} customLabel={bucketLabels['music']} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'fitness')} bTasks={openTasksByBucket('fitness')} {...boardProps} customLabel={bucketLabels['fitness']} />
-            <BucketBoard bucket={BUCKETS.find(b => b.id === 'personal')} bTasks={openTasksByBucket('personal')} {...boardProps} customLabel={bucketLabels['personal']} />
+            {/* Bucket grid — Udukku tall on left, 2×3 on right */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gridAutoRows: 'minmax(130px, calc((100vh - 310px) / 3))', gap: 12 }}>
+              {BUCKETS.filter(b => !hiddenBuckets.has(b.id)).map(b => (
+                <BucketBoard key={b.id} bucket={b} bTasks={openTasksByBucket(b.id)} {...boardProps} customLabel={bucketLabels[b.id]} />
+              ))}
+            </div>
+
+            {/* Custom buckets below the main grid */}
+            {customBuckets.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
+                {customBuckets.map(cb => (
+                  <BucketBoard key={cb.id} bucket={cb} bTasks={openTasksByBucket(cb.id)} {...boardProps} customLabel={bucketLabels[cb.id]} />
+                ))}
+              </div>
+            )}
           </div>
         )
       )}
