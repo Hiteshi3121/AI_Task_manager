@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
-import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, updatePerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB, fetchRecentCompleted } from './lib/api'
+import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, updatePerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, createPersonTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB, fetchRecentCompleted } from './lib/api'
 
 const BUCKETS = [
   { id: 'udukku',         label: 'Udukku',                            color: '#185FA5', bg: '#E6F1FB' },
@@ -120,7 +120,8 @@ function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateTitle, bucketId
     if (value) onUpdateDue(task.id, 'custom', new Date(value).toISOString())
   }
 
-  const currentAssignee = assignee || 'Ishita'
+  const linkedPersonName = task.person_id ? (people || []).find(p => p.id === task.person_id)?.name : null
+  const currentAssignee = assignee || linkedPersonName || 'Ishita'
   const peopleNames = ['Ishita', ...(people || []).map(p => p.name).filter(n => n !== 'Ishita')]
 
   return (
@@ -301,32 +302,23 @@ function PersonCard({ person, onDelete, onUpdatePerson, onAddTask }) {
   const avatar = person.name[0]?.toUpperCase()
 
   return (
-    <div style={{ background: 'white', border: '1px solid #e5e5e5', borderRadius: 12, padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+    <div style={{ background: 'white', border: '1px solid #e5e5e5', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', minHeight: 270 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, flexShrink: 0 }}>
         <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#E6F1FB', color: '#185FA5', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{avatar}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           {editingName ? (
-            <input
-              autoFocus
-              value={nameDraft}
-              onChange={e => setNameDraft(e.target.value)}
-              onBlur={saveName}
+            <input autoFocus value={nameDraft} onChange={e => setNameDraft(e.target.value)} onBlur={saveName}
               onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') { setNameDraft(person.name); setEditingName(false) } }}
-              style={{ fontSize: 13, fontWeight: 600, border: 'none', borderBottom: '1px solid #185FA5', outline: 'none', background: 'transparent', width: '100%', padding: '0 2px' }}
-            />
+              style={{ fontSize: 13, fontWeight: 600, border: 'none', borderBottom: '1px solid #185FA5', outline: 'none', background: 'transparent', width: '100%', padding: '0 2px' }} />
           ) : (
             <p onClick={() => setEditingName(true)} title="Click to edit name" style={{ margin: 0, fontSize: 13, fontWeight: 600, cursor: 'text' }}>{person.name}</p>
           )}
           {editingRole ? (
-            <input
-              autoFocus
-              value={roleDraft}
-              onChange={e => setRoleDraft(e.target.value)}
-              onBlur={saveRole}
+            <input autoFocus value={roleDraft} onChange={e => setRoleDraft(e.target.value)} onBlur={saveRole}
               onKeyDown={e => { if (e.key === 'Enter') saveRole(); if (e.key === 'Escape') { setRoleDraft(person.role || ''); setEditingRole(false) } }}
               placeholder="Add role..."
-              style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #ccc', outline: 'none', background: 'transparent', width: '100%', marginTop: 2, color: '#666', padding: '0 2px' }}
-            />
+              style={{ fontSize: 11, border: 'none', borderBottom: '1px solid #ccc', outline: 'none', background: 'transparent', width: '100%', marginTop: 2, color: '#666', padding: '0 2px' }} />
           ) : (
             <p onClick={() => setEditingRole(true)} title="Click to edit role" style={{ margin: '2px 0 0', fontSize: 11, color: '#888', cursor: 'text' }}>{person.role || <span style={{ color: '#ccc' }}>Click to add role</span>}</p>
           )}
@@ -334,36 +326,34 @@ function PersonCard({ person, onDelete, onUpdatePerson, onAddTask }) {
         <button onClick={() => onDelete(person.id)} title="Remove person" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 15, padding: '0 2px', flexShrink: 0, lineHeight: 1 }}>✕</button>
       </div>
 
-      {/* Tasks */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {/* Tasks — scrollable */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160 }}>
         {openTasks.length === 0
           ? <p style={{ fontSize: 11, color: '#bbb', margin: 0 }}>No open tasks</p>
           : openTasks.map(task => (
             <div key={task.id} style={{ fontSize: 12, padding: '5px 8px', borderRadius: 6, background: '#fafafa', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
               <span style={{ color: PRIORITY_COLOR[task.priority] || '#ccc', flexShrink: 0, marginTop: 1 }}>•</span>
-              <span style={{ color: '#333', lineHeight: 1.4 }}>{task.title}</span>
+              <span style={{ color: '#333', lineHeight: 1.5 }}>{task.raw_text || task.title}</span>
             </div>
           ))
         }
       </div>
 
       {/* Add task */}
-      {showAddTask ? (
-        <div style={{ display: 'flex', gap: 4, marginTop: 10 }}>
-          <input
-            autoFocus
-            value={taskDraft}
-            onChange={e => setTaskDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') submitTask(); if (e.key === 'Escape') { setShowAddTask(false); setTaskDraft('') } }}
-            placeholder="Task title..."
-            style={{ flex: 1, fontSize: 12, padding: '5px 8px', border: '1px solid #185FA5', borderRadius: 6, outline: 'none' }}
-          />
-          <button onClick={submitTask} style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: 'none', background: '#185FA5', color: 'white', cursor: 'pointer', fontWeight: 600 }}>Add</button>
-          <button onClick={() => { setShowAddTask(false); setTaskDraft('') }} style={{ fontSize: 11, padding: '5px 8px', borderRadius: 6, border: 'none', background: '#eee', color: '#666', cursor: 'pointer' }}>✕</button>
-        </div>
-      ) : (
-        <button onClick={() => setShowAddTask(true)} style={{ marginTop: 10, fontSize: 11, padding: '4px 10px', borderRadius: 7, border: '1px dashed #185FA5', background: 'transparent', color: '#185FA5', cursor: 'pointer', fontWeight: 500 }}>+ Add task</button>
-      )}
+      <div style={{ flexShrink: 0, marginTop: 10 }}>
+        {showAddTask ? (
+          <div style={{ display: 'flex', gap: 4 }}>
+            <input autoFocus value={taskDraft} onChange={e => setTaskDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submitTask(); if (e.key === 'Escape') { setShowAddTask(false); setTaskDraft('') } }}
+              placeholder="Type task in plain text — AI will summarise..."
+              style={{ flex: 1, fontSize: 12, padding: '5px 8px', border: '1px solid #185FA5', borderRadius: 6, outline: 'none' }} />
+            <button onClick={submitTask} style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: 'none', background: '#185FA5', color: 'white', cursor: 'pointer', fontWeight: 600 }}>Add</button>
+            <button onClick={() => { setShowAddTask(false); setTaskDraft('') }} style={{ fontSize: 11, padding: '5px 8px', borderRadius: 6, border: 'none', background: '#eee', color: '#666', cursor: 'pointer' }}>✕</button>
+          </div>
+        ) : (
+          <button onClick={() => setShowAddTask(true)} style={{ fontSize: 11, padding: '4px 10px', borderRadius: 7, border: '1px dashed #185FA5', background: 'transparent', color: '#185FA5', cursor: 'pointer', fontWeight: 500 }}>+ Add task</button>
+        )}
+      </div>
     </div>
   )
 }
@@ -657,6 +647,8 @@ export default function App() {
   async function handleDone(id, done) {
     const updated = await updateTask(id, { done: !done })
     setTasks(prev => prev.map(t => t.id === id ? updated : t))
+    // Keep people cards in sync — mark task done/undone there too
+    setPeople(prev => prev.map(p => ({ ...p, tasks: p.tasks.map(t => t.id === id ? { ...t, done: !done } : t) })))
     // If marking done, reload tasks so any spawned recurring task appears
     if (!done) fetchTasks().then(setTasks).catch(() => {})
   }
@@ -732,11 +724,12 @@ export default function App() {
     }
   }
 
-  async function handleAddPersonTask(personId, title) {
+  async function handleAddPersonTask(personId, rawText) {
     try {
-      const task = await createManualTask('udukku', title, personId)
+      const task = await createPersonTask(rawText, personId)
       setTasks(prev => [task, ...prev])
-      fetchPeople().then(setPeople).catch(() => {})
+      // Add the new task into the person's card without a full reload
+      setPeople(prev => prev.map(p => p.id === personId ? { ...p, tasks: [{ id: task.id, title: task.title, raw_text: task.raw_text, priority: task.priority, due: task.due, done: false }, ...p.tasks] } : p))
     } catch (e) {
       setError('Could not add task.')
     }
@@ -1094,8 +1087,15 @@ export default function App() {
           {people.length === 0 ? (
             <p style={{ fontSize: 13, color: '#999' }}>Loading team…</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-              {people.map(person => (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {(() => {
+                const ORDER = ['Ishita','Evita','Meezan','Heeral','Evani','Hiya','Sagarika']
+                return [...people].sort((a, b) => {
+                  const ai = ORDER.indexOf(a.name), bi = ORDER.indexOf(b.name)
+                  if (ai === -1 && bi === -1) return a.name.localeCompare(b.name)
+                  return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+                })
+              })().map(person => (
                 <PersonCard
                   key={person.id}
                   person={person}

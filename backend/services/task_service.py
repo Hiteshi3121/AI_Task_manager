@@ -126,6 +126,32 @@ def create_task(raw_text: str) -> dict:
             return cur.fetchone()
 
 
+def create_person_task(raw_text: str, person_id: int) -> dict:
+    """Classify raw text for title/priority/due via AI, then force bucket=udukku and set person_id."""
+    known_students = _get_known_students()
+    classified = classify_task(raw_text, known_students)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                insert into tasks
+                    (raw_text, title, bucket_id, sub_bucket_id, person_id, priority, due)
+                values (%s, %s, 'udukku', %s, %s, %s, %s)
+                returning *
+                """,
+                (
+                    raw_text,
+                    classified["title"],
+                    classified.get("sub_bucket_id"),
+                    person_id,
+                    classified["priority"],
+                    _clamp_due(classified["due"]),
+                ),
+            )
+            conn.commit()
+            return cur.fetchone()
+
+
 def create_manual_task(bucket_id: str, title: str, person_id: int | None = None) -> dict:
     """Insert a task directly into a bucket without AI classification."""
     with get_connection() as conn:

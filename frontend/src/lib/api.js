@@ -157,6 +157,16 @@ export async function transcribeAudio(blob) {
   return r.json()
 }
 
+export async function createPersonTask(rawText, personId) {
+  const r = await fetch(`${BASE}/tasks/person-task`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ raw_text: rawText, person_id: personId }),
+  })
+  if (!r.ok) throw new Error('Failed to create task')
+  return r.json()
+}
+
 export async function createManualTask(bucketId, title, personId = null) {
   const r = await fetch(`${BASE}/tasks/manual`, {
     method: 'POST',
