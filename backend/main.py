@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from routers import brief, students, people, calendar, analytics
+from routers import brief, students, people, calendar, analytics, transcribe
 from routers import tasks
 from services.brief_service import archive_yesterday_if_missing, get_daily_brief
 from services import email_service, calendar_service
@@ -111,6 +111,7 @@ app.include_router(brief.router, prefix="/api/brief", tags=["brief"])
 app.include_router(people.router, prefix="/api/people", tags=["people"])
 app.include_router(calendar.router, prefix="/api/calendar", tags=["calendar"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(transcribe.router, prefix="/api/transcribe", tags=["transcribe"])
 
 
 @app.get("/health")

@@ -112,6 +112,24 @@ export async function disconnectCalendar() {
   if (!r.ok) throw new Error('Failed to disconnect calendar')
 }
 
+export async function transcribeAudio(blob) {
+  const form = new FormData()
+  form.append('file', blob, 'recording.webm')
+  const r = await fetch(`${BASE}/transcribe/`, { method: 'POST', body: form })
+  if (!r.ok) throw new Error('Transcription failed')
+  return r.json()
+}
+
+export async function createManualTask(bucketId, title) {
+  const r = await fetch(`${BASE}/tasks/manual`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bucket_id: bucketId, title }),
+  })
+  if (!r.ok) throw new Error('Failed to create task')
+  return r.json()
+}
+
 // ---------- Analytics ----------
 
 export async function fetchAnalytics() {

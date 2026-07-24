@@ -1,5 +1,6 @@
 from uuid import UUID
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from models.schemas import TaskCreate, TaskUpdate
 from services import task_service
 
@@ -47,3 +48,15 @@ async def delete(task_id: str):
     _validate_task_id(task_id)
     task_service.delete_task(task_id)
     return {"deleted": task_id}
+
+
+class ManualTaskCreate(BaseModel):
+    bucket_id: str
+    title: str
+
+@router.post("/manual")
+async def create_manual(payload: ManualTaskCreate):
+    try:
+        return task_service.create_manual_task(payload.bucket_id, payload.title.strip())
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Could not save task: {e}")

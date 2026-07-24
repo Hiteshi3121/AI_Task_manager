@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
-import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics } from './lib/api'
+import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask } from './lib/api'
 
 const BUCKETS = [
   { id: 'udukku',         label: 'Udukku',                            color: '#185FA5', bg: '#E6F1FB' },
@@ -60,6 +60,36 @@ const STUDENT_STATUSES = [
 const STATUS_BY_ID = Object.fromEntries(STUDENT_STATUSES.map(s => [s.id, s]))
 
 const card = { background: 'white', border: '1px solid #e5e5e5', borderRadius: 12 }
+
+function MicIcon({ size = 15, color = '#666' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+      <line x1="12" y1="19" x2="12" y2="23"/>
+      <line x1="8" y1="23" x2="16" y2="23"/>
+    </svg>
+  )
+}
+
+function CheckIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="12" fill="#22C55E"/>
+      <polyline points="6,12 10,16 18,8" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  )
+}
+
+function XIcon({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="12" fill="#EF4444"/>
+      <line x1="8" y1="8" x2="16" y2="16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="16" y1="8" x2="8" y2="16" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+    </svg>
+  )
+}
 
 // ---------- Task card ----------
 // Due label sits inline before the title (instead of on its own line below)
@@ -167,8 +197,8 @@ function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onU
             <option value="weekly">weekly</option>
             <option value="monthly">monthly</option>
           </select>
-          <button onClick={() => onDone(task.id, task.done)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: 0.7 }}>✓</button>
-          <button onClick={() => onDelete(task.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, opacity: 0.7 }}>🗑</button>
+          <button onClick={() => onDone(task.id, task.done)} title="Mark done" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}><CheckIcon /></button>
+          <button onClick={() => onDelete(task.id)} title="Delete task" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}><XIcon /></button>
         </div>
       </div>
     </div>
@@ -225,16 +255,30 @@ function StudentRow({ student, onUpdate }) {
 }
 
 // ---------- Bucket board ----------
-function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel }) {
+function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateRecurrence, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask }) {
   const placement = GRID_PLACEMENT[bucket.id]
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(customLabel || bucket.label)
+  const [showAddManual, setShowAddManual] = useState(false)
+  const [manualTitle, setManualTitle] = useState('')
 
   function saveLabel() {
     setEditingLabel(false)
     const val = labelDraft.trim() || bucket.label
     setLabelDraft(val)
     onSaveLabel(bucket.id, val)
+  }
+
+  function confirmManual() {
+    if (!manualTitle.trim()) return
+    onAddManualTask(bucket.id, manualTitle.trim())
+    setManualTitle('')
+    setShowAddManual(false)
+  }
+
+  function cancelManual() {
+    setManualTitle('')
+    setShowAddManual(false)
   }
 
   return (
@@ -256,10 +300,29 @@ function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, 
             style={{ fontSize: 12.5, fontWeight: 700, color: bucket.color, flex: 1, cursor: 'text' }}
           >{customLabel || bucket.label}</span>
         )}
+        <button
+          onClick={() => setShowAddManual(v => !v)}
+          title="Add task directly"
+          style={{ fontSize: 10, padding: '2px 7px', borderRadius: 8, border: `1px solid ${bucket.color}55`, background: 'transparent', color: bucket.color, cursor: 'pointer', flexShrink: 0, fontWeight: 600 }}
+        >+ Add</button>
         <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: bucket.color + '22', color: bucket.color }}>{bTasks.length}</span>
       </div>
 
       <div style={{ padding: 8, overflowY: 'auto', flex: 1 }}>
+        {showAddManual && (
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
+            <input
+              autoFocus
+              value={manualTitle}
+              onChange={e => setManualTitle(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') confirmManual(); if (e.key === 'Escape') cancelManual() }}
+              placeholder="Task title..."
+              style={{ flex: 1, fontSize: 12, padding: '5px 8px', border: `1px solid ${bucket.color}66`, borderRadius: 6, outline: 'none' }}
+            />
+            <button onClick={confirmManual} style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: 'none', background: bucket.color, color: 'white', cursor: 'pointer', fontWeight: 600 }}>Add</button>
+            <button onClick={cancelManual} style={{ fontSize: 11, padding: '5px 8px', borderRadius: 6, border: 'none', background: '#eee', color: '#666', cursor: 'pointer' }}>✕</button>
+          </div>
+        )}
         {bucket.id === 'ascend_classes' && (
           <div style={{ marginBottom: 8 }}>
             {students.length === 0 ? (
@@ -303,6 +366,7 @@ export default function App() {
   const [addingStudent, setAddingStudent] = useState(false)
   const [expandedTask, setExpandedTask] = useState(null) // task object shown in the People-tab modal
   const [isRecording, setIsRecording] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
   const [calendarConnected, setCalendarConnected] = useState(false)
   const [analytics, setAnalytics] = useState(null)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
@@ -313,6 +377,8 @@ export default function App() {
   const [newPersonRole, setNewPersonRole] = useState('')
   const [addingPerson, setAddingPerson] = useState(false)
   const recognitionRef = useRef(null)
+  const mediaRecorderRef = useRef(null)
+  const chunksRef = useRef([])
   const isMobile = windowWidth < 768
 
   useEffect(() => {
@@ -321,36 +387,37 @@ export default function App() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  function handleMicClick() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      setError('Voice input is not supported in this browser — try Chrome.')
-      return
-    }
+  async function handleMicClick() {
     if (isRecording) {
-      recognitionRef.current?.stop()
+      mediaRecorderRef.current?.stop()
       return
     }
-
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'en-IN'
-    recognition.interimResults = true
-    recognition.continuous = false
-
-    recognition.onresult = (event) => {
-      const transcript = Array.from(event.results).map(r => r[0].transcript).join('')
-      setInput(transcript)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      chunksRef.current = []
+      const mr = new MediaRecorder(stream)
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        setIsRecording(false)
+        setTranscribing(true)
+        try {
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+          const { text } = await transcribeAudio(blob)
+          setInput(text)
+        } catch {
+          setError('Transcription failed — check backend or mic permissions.')
+        } finally {
+          setTranscribing(false)
+        }
+      }
+      mediaRecorderRef.current = mr
+      setError('')
+      setIsRecording(true)
+      mr.start()
+    } catch {
+      setError('Could not access microphone — check browser permissions.')
     }
-    recognition.onerror = () => {
-      setError('Could not capture audio — check microphone permissions.')
-      setIsRecording(false)
-    }
-    recognition.onend = () => setIsRecording(false)
-
-    recognitionRef.current = recognition
-    setError('')
-    setIsRecording(true)
-    recognition.start()
   }
 
   const loadAll = useCallback(async () => {
@@ -496,6 +563,15 @@ export default function App() {
     localStorage.setItem('bucketLabels', JSON.stringify(updated))
   }
 
+  async function handleAddManualTask(bucketId, title) {
+    try {
+      const task = await createManualTask(bucketId, title)
+      setTasks(prev => [task, ...prev])
+    } catch (e) {
+      setError('Could not add task.')
+    }
+  }
+
   async function handleAddPerson() {
     if (!newPersonName.trim()) return
     setAddingPerson(true)
@@ -531,6 +607,7 @@ export default function App() {
     onUpdateStudent: handleUpdateStudent,
     newStudentName, setNewStudentName, addingStudent, onAddStudent: handleAddStudent,
     onSaveLabel: handleSaveBucketLabel, customLabel: undefined,
+    onAddManualTask: handleAddManualTask,
   }
 
   return (
@@ -538,6 +615,7 @@ export default function App() {
       <style>{`
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         * { box-sizing: border-box; }
+        html { zoom: 1.25; }
       `}</style>
 
       {/* Header */}
@@ -552,7 +630,7 @@ export default function App() {
         {/* Desktop tabs — hidden on mobile (shown as bottom nav instead) */}
         {!isMobile && (
           <div style={{ display: 'flex', gap: 6 }}>
-            {[['today', 'Today'], ['brief', 'Daily brief'], ['people', 'People'], ['history', 'History']].map(([id, label]) => (
+            {[['today', 'My Tasks'], ['brief', "Today's Brief"], ['people', 'People'], ['history', 'History']].map(([id, label]) => (
               <button key={id} onClick={() => setTab(id)} style={{ padding: '5px 14px', fontSize: 13, borderRadius: 20, border: '0.5px solid', borderColor: tab === id ? '#185FA5' : '#ddd', background: tab === id ? '#E6F1FB' : 'white', color: tab === id ? '#185FA5' : '#555', cursor: 'pointer', fontWeight: tab === id ? 600 : 400 }}>{label}</button>
             ))}
           </div>
@@ -562,7 +640,7 @@ export default function App() {
       {/* Mobile bottom nav */}
       {isMobile && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderTop: '1px solid #e5e5e5', display: 'flex', zIndex: 100, paddingBottom: 'env(safe-area-inset-bottom)' }}>
-          {[['today', '🗂', 'Today'], ['brief', '💡', 'Brief'], ['people', '👥', 'People'], ['history', '📈', 'History']].map(([id, icon, label]) => (
+          {[['today', '🗂', 'My Tasks'], ['brief', '💡', "Today's Brief"], ['people', '👥', 'People'], ['history', '📈', 'History']].map(([id, icon, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{ flex: 1, padding: '10px 4px 8px', border: 'none', background: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
               <span style={{ fontSize: 18 }}>{icon}</span>
               <span style={{ fontSize: 10, color: tab === id ? '#185FA5' : '#999', fontWeight: tab === id ? 600 : 400 }}>{label}</span>
@@ -587,7 +665,7 @@ export default function App() {
                 placeholder={isRecording ? 'Listening…' : 'Drop a task, a thought...'}
                 style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13 }}
               />
-              <button onClick={handleMicClick} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: 'pointer', background: isRecording ? '#E24B4A' : '#f0f0f0', color: isRecording ? 'white' : '#666', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: isRecording ? 'pulse 1.2s infinite' : 'none' }}>🎤</button>
+              <button onClick={handleMicClick} disabled={transcribing} style={{ flexShrink: 0, width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: transcribing ? 'default' : 'pointer', background: isRecording ? '#E24B4A' : transcribing ? '#185FA5' : '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: isRecording ? 'pulse 1.2s infinite' : 'none' }}>{transcribing ? <span style={{ fontSize: 10, color: 'white' }}>…</span> : <MicIcon color={isRecording ? 'white' : '#666'} />}</button>
               <button onClick={handleAdd} disabled={loading || !input.trim()} style={{ flexShrink: 0, padding: '6px 12px', fontSize: 12, borderRadius: 8, border: 'none', background: loading ? '#aaa' : '#185FA5', color: 'white', cursor: loading ? 'default' : 'pointer' }}>{loading ? '…' : 'Send'}</button>
             </div>
             {BUCKETS.map(b => (
@@ -610,7 +688,7 @@ export default function App() {
                   placeholder={isRecording ? 'Listening…' : 'Drop a task, a thought, anything...'}
                   style={{ flex: 1, border: 'none', outline: 'none', fontSize: 13, textAlign: 'center', background: 'transparent' }}
                 />
-                <button onClick={handleMicClick} title={isRecording ? 'Stop recording' : 'Speak a task'} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: 'pointer', background: isRecording ? '#E24B4A' : '#f0f0f0', color: isRecording ? 'white' : '#666', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: isRecording ? 'pulse 1.2s infinite' : 'none' }}>🎤</button>
+                <button onClick={handleMicClick} disabled={transcribing} title={isRecording ? 'Stop recording' : transcribing ? 'Transcribing…' : 'Speak a task'} style={{ flexShrink: 0, width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: transcribing ? 'default' : 'pointer', background: isRecording ? '#E24B4A' : transcribing ? '#185FA5' : '#f0f0f0', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: isRecording ? 'pulse 1.2s infinite' : 'none' }}>{transcribing ? <span style={{ fontSize: 10, color: 'white' }}>…</span> : <MicIcon size={13} color={isRecording ? 'white' : '#666'} />}</button>
               </div>
               <button onClick={handleAdd} disabled={loading || !input.trim()} style={{ padding: '7px 20px', fontSize: 12.5, borderRadius: 8, border: 'none', background: loading ? '#aaa' : '#185FA5', color: 'white', cursor: loading ? 'default' : 'pointer', fontWeight: 600 }}>
                 {loading ? 'Classifying…' : 'Send'}
