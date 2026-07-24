@@ -112,6 +112,27 @@ export async function disconnectCalendar() {
   if (!r.ok) throw new Error('Failed to disconnect calendar')
 }
 
+export async function fetchCustomBuckets() {
+  const r = await fetch(`${BASE}/buckets/custom`)
+  if (!r.ok) return []
+  return r.json()
+}
+
+export async function createBucketInDB(id, name) {
+  const r = await fetch(`${BASE}/buckets/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, name }),
+  })
+  if (!r.ok) throw new Error('Failed to create bucket')
+  return r.json()
+}
+
+export async function deleteBucketFromDB(id) {
+  const r = await fetch(`${BASE}/buckets/${id}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error('Failed to delete bucket')
+}
+
 export async function transcribeAudio(blob) {
   const form = new FormData()
   form.append('file', blob, 'recording.webm')

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
-import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask } from './lib/api'
+import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB } from './lib/api'
 
 const BUCKETS = [
   { id: 'udukku',         label: 'Udukku',                            color: '#185FA5', bg: '#E6F1FB' },
@@ -16,13 +16,8 @@ const BUCKETS = [
 // Udukku is the only bucket spanning two rows — it's the busiest board —
 // which is what leaves exactly one free cell (center, row 2) for capture.
 const GRID_PLACEMENT = {
-  udukku:         { column: 1, row: '1 / span 3' },
-  ascend_social:  { column: 2, row: 1 },
-  ascend_classes: { column: 3, row: 1 },
-  music:          { column: 2, row: 2 },
-  social_brand:   { column: 3, row: 2 },
-  fitness:        { column: 2, row: 3 },
-  personal:       { column: 3, row: 3 },
+  udukku: { column: 1, row: '1 / span 3' },
+  // all other buckets auto-flow so vacant slots are filled automatically
 }
 
 const SUB_BUCKETS = {
@@ -435,12 +430,30 @@ export default function App() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [t, s, b, p, cal] = await Promise.all([fetchTasks(), fetchStudents(), fetchBrief(), fetchPeople(), fetchCalendarStatus()])
+      const [t, s, b, p, cal, dbBuckets] = await Promise.all([fetchTasks(), fetchStudents(), fetchBrief(), fetchPeople(), fetchCalendarStatus(), fetchCustomBuckets()])
       setTasks(t)
       setStudents(s)
       setBrief(b)
       setPeople(p)
       setCalendarConnected(cal.connected)
+      // Merge DB custom buckets with any localStorage color info
+      if (dbBuckets.length > 0) {
+        const saved = JSON.parse(localStorage.getItem('customBuckets') || '[]')
+        const savedById = Object.fromEntries(saved.map(cb => [cb.id, cb]))
+        const palette = [
+          { color: '#0D7377', bg: '#E0F7FA' }, { color: '#6B4EAD', bg: '#F3E8FF' },
+          { color: '#B45309', bg: '#FEF3C7' }, { color: '#065F46', bg: '#D1FAE5' },
+          { color: '#6B21A8', bg: '#F5F3FF' },
+        ]
+        const merged = dbBuckets.map((db, i) => ({
+          id: db.id,
+          label: db.name,
+          color: savedById[db.id]?.color || palette[i % palette.length].color,
+          bg: savedById[db.id]?.bg || palette[i % palette.length].bg,
+        }))
+        setCustomBuckets(merged)
+        localStorage.setItem('customBuckets', JSON.stringify(merged))
+      }
     } catch (e) {
       setError('Could not load dashboard data. Is the backend running?')
     }
@@ -585,19 +598,22 @@ export default function App() {
     }
   }
 
-  function handleDeleteBucket(bucketId) {
+  async function handleDeleteBucket(bucketId) {
     if (BUCKETS.some(b => b.id === bucketId)) {
       const updated = new Set([...hiddenBuckets, bucketId])
       setHiddenBuckets(updated)
       localStorage.setItem('hiddenBuckets', JSON.stringify([...updated]))
     } else {
+      try {
+        await deleteBucketFromDB(bucketId)
+      } catch {}
       const updated = customBuckets.filter(b => b.id !== bucketId)
       setCustomBuckets(updated)
       localStorage.setItem('customBuckets', JSON.stringify(updated))
     }
   }
 
-  function handleAddBucket() {
+  async function handleAddBucket() {
     if (!newBucketName.trim()) return
     const palette = [
       { color: '#0D7377', bg: '#E0F7FA' }, { color: '#6B4EAD', bg: '#F3E8FF' },
@@ -605,7 +621,14 @@ export default function App() {
       { color: '#6B21A8', bg: '#F5F3FF' },
     ]
     const c = palette[customBuckets.length % palette.length]
-    const newBucket = { id: `custom_${Date.now()}`, label: newBucketName.trim(), ...c }
+    const id = `custom_${Date.now()}`
+    const newBucket = { id, label: newBucketName.trim(), ...c }
+    try {
+      await createBucketInDB(id, newBucketName.trim())
+    } catch (e) {
+      setError('Could not create bucket.')
+      return
+    }
     const updated = [...customBuckets, newBucket]
     setCustomBuckets(updated)
     localStorage.setItem('customBuckets', JSON.stringify(updated))
@@ -715,7 +738,7 @@ export default function App() {
             ))}
           </div>
         ) : (
-          <div>
+          <div style={{ zoom: 0.95 }}>
             {/* Capture bar — full width at top */}
             <div style={{ ...card, border: '1.5px solid #185FA5', padding: '10px 14px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 18, flexShrink: 0 }}>✨</span>
@@ -740,21 +763,15 @@ export default function App() {
               )}
             </div>
 
-            {/* Bucket grid — Udukku tall on left, 2×3 on right */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gridAutoRows: 'minmax(130px, calc((100vh - 310px) / 3))', gap: 12 }}>
+            {/* Bucket grid — Udukku tall on left, others auto-flow to fill vacant slots */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gridAutoRows: 'minmax(130px, calc((100vh - 310px) / 3))', gridAutoFlow: 'row dense', gap: 12 }}>
               {BUCKETS.filter(b => !hiddenBuckets.has(b.id)).map(b => (
                 <BucketBoard key={b.id} bucket={b} bTasks={openTasksByBucket(b.id)} {...boardProps} customLabel={bucketLabels[b.id]} />
               ))}
+              {customBuckets.map(cb => (
+                <BucketBoard key={cb.id} bucket={cb} bTasks={openTasksByBucket(cb.id)} {...boardProps} customLabel={bucketLabels[cb.id]} />
+              ))}
             </div>
-
-            {/* Custom buckets below the main grid */}
-            {customBuckets.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginTop: 12 }}>
-                {customBuckets.map(cb => (
-                  <BucketBoard key={cb.id} bucket={cb} bTasks={openTasksByBucket(cb.id)} {...boardProps} customLabel={bucketLabels[cb.id]} />
-                ))}
-              </div>
-            )}
           </div>
         )
       )}
@@ -941,7 +958,7 @@ export default function App() {
         const weekDiff = this_week - last_week
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, zoom: 0.95 }}>
 
             {/* KPI row */}
             <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)', gap: 12 }}>
