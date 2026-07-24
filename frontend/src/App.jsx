@@ -960,19 +960,24 @@ export default function App() {
                 <p style={{ fontSize: 12, color: '#999' }}>Nothing urgent right now.</p>
               ) : (() => {
                 const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS, ...customBuckets.map(cb => ({ id: cb.id, label: bucketLabels[cb.id] || cb.label }))].map(b => [b.id, b.label]))
-                return brief.what_matters_today.map((item, i) => {
-                  const matchedTask = tasks.find(t => !t.done && (t.title === item.text || (item.text && item.text.includes(t.title))))
+                const enriched = brief.what_matters_today.map((item, i) => {
+                  const matchedTask = tasks.find(t => t.title === item.text || (item.text && item.text.includes(t.title)))
                   const bucketLabel = matchedTask ? (BUCKET_LABEL_MAP[matchedTask.bucket_id] || matchedTask.bucket_id) : null
-                  return (
-                    <p key={i} style={{ fontSize: 12.5, lineHeight: 1.6, margin: '0 0 9px', display: 'flex', gap: 7, alignItems: 'flex-start' }}>
-                      <span style={{ color: PRIORITY_COLOR[item.priority] || '#999', fontSize: 16, lineHeight: 1.2, flexShrink: 0 }}>•</span>
-                      <span>
-                        {bucketLabel && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#185FA5', background: '#E6F1FB', padding: '1px 6px', borderRadius: 8, marginRight: 6, whiteSpace: 'nowrap' }}>{bucketLabel}</span>}
-                        {item.text}
-                      </span>
-                    </p>
-                  )
+                  return { item, i, matchedTask, bucketLabel, isDone: !!matchedTask?.done }
                 })
+                const sorted = [...enriched.filter(e => !e.isDone), ...enriched.filter(e => e.isDone)]
+                return sorted.map(({ item, i, bucketLabel, isDone }) => (
+                  <p key={i} style={{ fontSize: 12.5, lineHeight: 1.6, margin: '0 0 9px', display: 'flex', gap: 7, alignItems: 'flex-start', opacity: isDone ? 0.65 : 1 }}>
+                    {isDone
+                      ? <span style={{ color: '#22C55E', fontSize: 16, lineHeight: 1.2, flexShrink: 0 }}>✓</span>
+                      : <span style={{ color: PRIORITY_COLOR[item.priority] || '#999', fontSize: 16, lineHeight: 1.2, flexShrink: 0 }}>•</span>
+                    }
+                    <span>
+                      {bucketLabel && <span style={{ fontSize: 10.5, fontWeight: 700, color: isDone ? '#22C55E' : '#185FA5', background: isDone ? '#EAFAF1' : '#E6F1FB', padding: '1px 6px', borderRadius: 8, marginRight: 6, whiteSpace: 'nowrap' }}>{bucketLabel}</span>}
+                      <span style={{ textDecoration: isDone ? 'line-through' : 'none', textDecorationColor: '#aaa' }}>{item.text}</span>
+                    </span>
+                  </p>
+                ))
               })()}
             </div>
 
@@ -1200,12 +1205,18 @@ export default function App() {
                   <BarChart data={dailyData} barSize={14} barGap={2}>
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} width={24} />
-                    <Tooltip contentStyle={{ fontSize: 12 }}
-                      formatter={(value, name) => [
-                        <span style={{ fontWeight: 600, color: name === 'Completed' ? '#22C55E' : '#E24B4A' }}>{value}</span>,
-                        <span style={{ color: name === 'Completed' ? '#22C55E' : '#E24B4A' }}>{name}</span>
-                      ]}
-                    />
+                    <Tooltip content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const completed = payload.find(p => p.dataKey === 'Completed')?.value ?? 0
+                      const carried = payload.find(p => p.dataKey === 'Carried over')?.value ?? 0
+                      return (
+                        <div style={{ background: 'white', border: '1px solid #e5e5e5', borderRadius: 8, padding: '8px 12px', fontSize: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                          <p style={{ margin: '0 0 4px', fontWeight: 700, color: '#333' }}>{label}</p>
+                          <p style={{ margin: '0 0 2px', color: '#E24B4A', fontWeight: 600 }}>carried over — {carried}</p>
+                          <p style={{ margin: 0, color: '#22C55E', fontWeight: 600 }}>completed — {completed}</p>
+                        </div>
+                      )
+                    }} />
                     <Bar dataKey="Completed" fill="#3B6D9A" radius={[3,3,0,0]} />
                     <Bar dataKey="Carried over" fill="#E24B4A" radius={[3,3,0,0]} />
                   </BarChart>
@@ -1217,10 +1228,28 @@ export default function App() {
               {/* Bucket breakdown */}
               <div style={{ ...card, padding: '16px 18px' }}>
                 <p style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>🗂 Tasks by bucket</p>
-                <ResponsiveContainer width="100%" height={Math.max(220, bucketData.length * 36)}>
-                  <BarChart data={bucketData} layout="vertical" barSize={14} barGap={2}>
-                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
+                <ResponsiveContainer width="100%" height={Math.max(220, bucketData.length * 44)}>
+                  <BarChart data={bucketData} layout="vertical" barSize={14} barGap={2} margin={{ left: 8 }}>
+                    <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" width={130}
+                      tick={({ x, y, payload }) => {
+                        const words = payload.value.split(' ')
+                        const lines = []
+                        let line = ''
+                        words.forEach(w => {
+                          if ((line + ' ' + w).trim().length > 16) { lines.push(line.trim()); line = w }
+                          else { line = (line + ' ' + w).trim() }
+                        })
+                        if (line) lines.push(line)
+                        return (
+                          <text x={x} y={y} textAnchor="end" dominantBaseline="middle" fill="#185FA5" fontWeight={600}>
+                            {lines.map((l, i) => (
+                              <tspan key={i} x={x} dy={i === 0 ? (lines.length > 1 ? -(lines.length - 1) * 6 : 0) : 12} fontSize={10}>{l}</tspan>
+                            ))}
+                          </text>
+                        )
+                      }}
+                    />
                     <Tooltip contentStyle={{ fontSize: 13 }}
                       formatter={(value, name) => [
                         <span style={{ fontWeight: 600, color: name === 'Open' ? '#B8860B' : '#7C4A1E' }}>{value}</span>,
