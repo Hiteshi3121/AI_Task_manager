@@ -270,7 +270,7 @@ function StudentRow({ student, onUpdate }) {
 }
 
 // ---------- Person card ----------
-function PersonCard({ person, onDelete, onUpdatePerson, onAddTask }) {
+function PersonCard({ person, onDelete, onUpdatePerson, onAddTask, onDoneTask }) {
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState(person.name)
   const [editingRole, setEditingRole] = useState(false)
@@ -333,7 +333,12 @@ function PersonCard({ person, onDelete, onUpdatePerson, onAddTask }) {
           : openTasks.map(task => (
             <div key={task.id} style={{ fontSize: 12, padding: '5px 8px', borderRadius: 6, background: '#fafafa', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
               <span style={{ color: PRIORITY_COLOR[task.priority] || '#ccc', flexShrink: 0, marginTop: 1 }}>•</span>
-              <span style={{ color: '#333', lineHeight: 1.5 }}>{task.raw_text || task.title}</span>
+              <span style={{ color: '#333', lineHeight: 1.5, flex: 1 }}>{task.raw_text || task.title}</span>
+              <button
+                onClick={() => { if (window.confirm('Mark this task as complete?')) onDoneTask(task.id, false) }}
+                title="Mark done"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0, marginTop: 1 }}
+              ><CheckIcon size={14} /></button>
             </div>
           ))
         }
@@ -946,7 +951,7 @@ export default function App() {
               {!brief ? <p style={{ fontSize: 12, color: '#999' }}>Loading…</p> : brief.what_matters_today.length === 0 ? (
                 <p style={{ fontSize: 12, color: '#999' }}>Nothing urgent right now.</p>
               ) : (() => {
-                const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS].map(b => [b.id, b.label]))
+                const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS, ...customBuckets.map(cb => ({ id: cb.id, label: bucketLabels[cb.id] || cb.label }))].map(b => [b.id, b.label]))
                 return brief.what_matters_today.map((item, i) => {
                   const matchedTask = tasks.find(t => !t.done && (t.title === item.text || (item.text && item.text.includes(t.title))))
                   const bucketLabel = matchedTask ? (BUCKET_LABEL_MAP[matchedTask.bucket_id] || matchedTask.bucket_id) : null
@@ -971,7 +976,7 @@ export default function App() {
               ) : completedTasks.length === 0 ? (
                 <p style={{ fontSize: 12, color: '#999' }}>No completed tasks yet.</p>
               ) : (() => {
-                const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS].map(b => [b.id, b.label]))
+                const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS, ...customBuckets.map(cb => ({ id: cb.id, label: bucketLabels[cb.id] || cb.label }))].map(b => [b.id, b.label]))
                 const byDate = {}
                 completedTasks.forEach(t => {
                   const day = t.completed_at ? new Date(t.completed_at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Unknown date'
@@ -1102,6 +1107,7 @@ export default function App() {
                   onDelete={handleDeletePerson}
                   onUpdatePerson={handleUpdatePerson}
                   onAddTask={handleAddPersonTask}
+                  onDoneTask={handleDone}
                 />
               ))}
             </div>
@@ -1113,14 +1119,13 @@ export default function App() {
       {tab === 'history' && (() => {
         if (!analytics) return <p style={{ fontSize: 13, color: '#999' }}>Loading…</p>
 
-        const BUCKET_LABELS = {
-          udukku: 'Udukku', ascend_social: 'Ascend Social', ascend_classes: 'Classes',
-          music: 'Music', social_brand: 'My Social', fitness: 'Fitness', personal: 'Personal',
-        }
-        const BUCKET_COLORS = {
-          udukku: '#185FA5', ascend_social: '#3B6D11', ascend_classes: '#993556',
-          music: '#534AB7', social_brand: '#854F0B', fitness: '#993C1D', personal: '#555555',
-        }
+        // Build label + color maps including custom buckets from state
+        const ALL_BUCKET_DEFS = [
+          ...BUCKETS,
+          ...customBuckets.map(cb => ({ id: cb.id, label: cb.label, color: cb.color })),
+        ]
+        const BUCKET_LABELS = Object.fromEntries(ALL_BUCKET_DEFS.map(b => [b.id, bucketLabels[b.id] || b.label]))
+        const BUCKET_COLORS = Object.fromEntries(ALL_BUCKET_DEFS.map(b => [b.id, b.color]))
         const PRIORITY_COLORS = { high: '#E24B4A', medium: '#EF9F27', low: '#639922' }
 
         const dailyData = [...analytics.daily].reverse().map(d => ({
@@ -1187,9 +1192,12 @@ export default function App() {
                   <BarChart data={dailyData} barSize={14} barGap={2}>
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} width={24} />
-                    <Tooltip contentStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="Completed" fill="#3B6D11" radius={[3,3,0,0]} />
-                    <Bar dataKey="Carried over" fill="#e5e5e5" radius={[3,3,0,0]} />
+                    <Tooltip contentStyle={{ fontSize: 12 }}
+                      formatter={(value, name) => [value, name === 'Completed' ? <span style={{ color: '#22C55E' }}>Completed</span> : <span style={{ color: '#E24B4A' }}>Carried over</span>]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} formatter={name => name === 'Completed' ? <span style={{ color: '#22C55E', fontWeight: 600 }}>Completed</span> : <span style={{ color: '#E24B4A', fontWeight: 600 }}>Carried over</span>} />
+                    <Bar dataKey="Completed" fill="#22C55E" radius={[3,3,0,0]} />
+                    <Bar dataKey="Carried over" fill="#E24B4A" radius={[3,3,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1199,14 +1207,13 @@ export default function App() {
               {/* Bucket breakdown */}
               <div style={{ ...card, padding: '16px 18px' }}>
                 <p style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 700 }}>🗂 Tasks by bucket</p>
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={Math.max(220, bucketData.length * 36)}>
                   <BarChart data={bucketData} layout="vertical" barSize={14} barGap={2}>
                     <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
                     <Tooltip contentStyle={{ fontSize: 13 }} />
-                    <Bar dataKey="Done" stackId="a" radius={[0,0,0,0]}>
-                      {bucketData.map((b, i) => <Cell key={i} fill={b.color} />)}
-                    </Bar>
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="Done" stackId="a" fill="#7C4A1E" radius={[0,0,0,0]} />
                     <Bar dataKey="Open" stackId="a" fill="#e5e5e5" radius={[0,4,4,0]} />
                   </BarChart>
                 </ResponsiveContainer>
