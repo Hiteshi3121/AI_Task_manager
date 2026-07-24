@@ -302,7 +302,7 @@ function PersonCard({ person, onDelete, onUpdatePerson, onAddTask, onDoneTask })
   const avatar = person.name[0]?.toUpperCase()
 
   return (
-    <div style={{ background: 'white', border: '1px solid #e5e5e5', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', minHeight: 270 }}>
+    <div style={{ background: 'white', border: '1px solid #e5e5e5', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', minHeight: 202 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, flexShrink: 0 }}>
         <div style={{ width: 34, height: 34, borderRadius: '50%', background: '#E6F1FB', color: '#185FA5', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{avatar}</div>
@@ -327,12 +327,12 @@ function PersonCard({ person, onDelete, onUpdatePerson, onAddTask, onDoneTask })
       </div>
 
       {/* Tasks — scrollable */}
-      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160 }}>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 110 }}>
         {openTasks.length === 0
           ? <p style={{ fontSize: 11, color: '#bbb', margin: 0 }}>No open tasks</p>
           : openTasks.map(task => (
             <div key={task.id} style={{ fontSize: 12, padding: '5px 8px', borderRadius: 6, background: '#fafafa', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-              <span style={{ color: PRIORITY_COLOR[task.priority] || '#ccc', flexShrink: 0, marginTop: 1 }}>•</span>
+              <span style={{ color: PRIORITY_COLOR[task.priority] || '#ccc', flexShrink: 0, fontSize: 22, lineHeight: 1, marginTop: -2 }}>•</span>
               <span style={{ color: '#333', lineHeight: 1.5, flex: 1 }}>{task.raw_text || task.title}</span>
               <button
                 onClick={() => { if (window.confirm('Mark this task as complete?')) onDoneTask(task.id, false) }}
@@ -1193,10 +1193,12 @@ export default function App() {
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fontSize: 10 }} allowDecimals={false} width={24} />
                     <Tooltip contentStyle={{ fontSize: 12 }}
-                      formatter={(value, name) => [value, name === 'Completed' ? <span style={{ color: '#22C55E' }}>Completed</span> : <span style={{ color: '#E24B4A' }}>Carried over</span>]}
+                      formatter={(value, name) => [
+                        <span style={{ fontWeight: 600, color: name === 'Completed' ? '#22C55E' : '#E24B4A' }}>{value}</span>,
+                        <span style={{ color: name === 'Completed' ? '#22C55E' : '#E24B4A' }}>{name}</span>
+                      ]}
                     />
-                    <Legend wrapperStyle={{ fontSize: 11 }} formatter={name => name === 'Completed' ? <span style={{ color: '#22C55E', fontWeight: 600 }}>Completed</span> : <span style={{ color: '#E24B4A', fontWeight: 600 }}>Carried over</span>} />
-                    <Bar dataKey="Completed" fill="#22C55E" radius={[3,3,0,0]} />
+                    <Bar dataKey="Completed" fill="#3B6D9A" radius={[3,3,0,0]} />
                     <Bar dataKey="Carried over" fill="#E24B4A" radius={[3,3,0,0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1211,10 +1213,15 @@ export default function App() {
                   <BarChart data={bucketData} layout="vertical" barSize={14} barGap={2}>
                     <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
                     <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
-                    <Tooltip contentStyle={{ fontSize: 13 }} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ fontSize: 13 }}
+                      formatter={(value, name) => [
+                        <span style={{ fontWeight: 600, color: name === 'Open' ? '#B8860B' : '#7C4A1E' }}>{value}</span>,
+                        <span style={{ color: name === 'Open' ? '#B8860B' : '#7C4A1E' }}>{name}</span>
+                      ]}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11 }} formatter={name => <span style={{ color: name === 'Open' ? '#B8860B' : '#7C4A1E', fontWeight: 600 }}>{name}</span>} />
                     <Bar dataKey="Done" stackId="a" fill="#7C4A1E" radius={[0,0,0,0]} />
-                    <Bar dataKey="Open" stackId="a" fill="#e5e5e5" radius={[0,4,4,0]} />
+                    <Bar dataKey="Open" stackId="a" fill="#F5C842" radius={[0,4,4,0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
