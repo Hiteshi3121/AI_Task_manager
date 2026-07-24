@@ -25,6 +25,10 @@ async def create(payload: TaskCreate):
         raise HTTPException(status_code=500, detail=f"Could not classify or save task: {e}")
 
 
+@router.get("/completed")
+async def list_completed(days: int = 7):
+    return task_service.list_completed_tasks(days=days)
+
 @router.get("/")
 async def list_all(bucket_id: str | None = None, done: bool | None = None):
     return task_service.list_tasks(bucket_id=bucket_id, done=done)

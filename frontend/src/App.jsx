@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
-import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, updatePerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB } from './lib/api'
+import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, updatePerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB, fetchRecentCompleted } from './lib/api'
 
 const BUCKETS = [
   { id: 'udukku',         label: 'Udukku',                            color: '#185FA5', bg: '#E6F1FB' },
@@ -203,8 +203,16 @@ function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateTitle, bucketId
               >{currentAssignee}</button>
             )
           )}
-          <button onClick={() => onDone(task.id, task.done)} title="Mark done" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}><CheckIcon /></button>
-          <button onClick={() => onDelete(task.id)} title="Delete task" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}><XIcon /></button>
+          <button
+            onClick={() => { if (window.confirm('Mark this task as complete?')) onDone(task.id, task.done) }}
+            title="Mark done"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+          ><CheckIcon /></button>
+          <button
+            onClick={() => { if (window.confirm('Delete this task?')) onDelete(task.id) }}
+            title="Delete task"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+          ><XIcon /></button>
         </div>
       </div>
     </div>
@@ -481,6 +489,7 @@ export default function App() {
   const [transcribing, setTranscribing] = useState(false)
   const [calendarConnected, setCalendarConnected] = useState(false)
   const [analytics, setAnalytics] = useState(null)
+  const [completedTasks, setCompletedTasks] = useState(null)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [bucketLabels, setBucketLabels] = useState(() => {
     try { return JSON.parse(localStorage.getItem('bucketLabels') || '{}') } catch { return {} }
@@ -584,6 +593,9 @@ export default function App() {
   useEffect(() => {
     if (tab === 'history' && !analytics) {
       fetchAnalytics().then(setAnalytics).catch(() => {})
+    }
+    if (tab === 'brief') {
+      fetchRecentCompleted(7).then(setCompletedTasks).catch(() => setCompletedTasks([]))
     }
   }, [tab, analytics])
 
@@ -931,30 +943,64 @@ export default function App() {
       {/* ---------- Daily brief ---------- */}
       {tab === 'brief' && (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.3fr 1fr', gap: 16, alignItems: 'start' }}>
-          <div style={{ ...card, padding: '14px 16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>💡 What matters today</p>
-              <button onClick={handleRefreshBrief} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '1px solid #ddd', background: 'white', color: '#666', cursor: 'pointer' }}>Refresh</button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* What matters today */}
+            <div style={{ ...card, padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>💡 What matters today</p>
+                <button onClick={handleRefreshBrief} style={{ fontSize: 11, padding: '3px 9px', borderRadius: 6, border: '1px solid #ddd', background: 'white', color: '#666', cursor: 'pointer' }}>Refresh</button>
+              </div>
+              {!brief ? <p style={{ fontSize: 12, color: '#999' }}>Loading…</p> : brief.what_matters_today.length === 0 ? (
+                <p style={{ fontSize: 12, color: '#999' }}>Nothing urgent right now.</p>
+              ) : (() => {
+                const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS].map(b => [b.id, b.label]))
+                return brief.what_matters_today.map((item, i) => {
+                  const matchedTask = tasks.find(t => !t.done && (t.title === item.text || (item.text && item.text.includes(t.title))))
+                  const bucketLabel = matchedTask ? (BUCKET_LABEL_MAP[matchedTask.bucket_id] || matchedTask.bucket_id) : null
+                  return (
+                    <p key={i} style={{ fontSize: 12.5, lineHeight: 1.6, margin: '0 0 9px', display: 'flex', gap: 7, alignItems: 'flex-start' }}>
+                      <span style={{ color: PRIORITY_COLOR[item.priority] || '#999', fontSize: 16, lineHeight: 1.2, flexShrink: 0 }}>•</span>
+                      <span>
+                        {bucketLabel && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#185FA5', background: '#E6F1FB', padding: '1px 6px', borderRadius: 8, marginRight: 6, whiteSpace: 'nowrap' }}>{bucketLabel}</span>}
+                        {item.text}
+                      </span>
+                    </p>
+                  )
+                })
+              })()}
             </div>
-            {!brief ? <p style={{ fontSize: 12, color: '#999' }}>Loading…</p> : brief.what_matters_today.length === 0 ? (
-              <p style={{ fontSize: 12, color: '#999' }}>Nothing urgent right now.</p>
-            ) : (() => {
-              const ALL_BUCKETS = [...BUCKETS, ...([{ id: 'udukku', label: 'Udukku' }])]
-              const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS].map(b => [b.id, b.label]))
-              return brief.what_matters_today.map((item, i) => {
-                const matchedTask = tasks.find(t => !t.done && (t.title === item.text || (item.text && item.text.includes(t.title))))
-                const bucketLabel = matchedTask ? (BUCKET_LABEL_MAP[matchedTask.bucket_id] || matchedTask.bucket_id) : null
-                return (
-                  <p key={i} style={{ fontSize: 12.5, lineHeight: 1.6, margin: '0 0 9px', display: 'flex', gap: 7, alignItems: 'flex-start' }}>
-                    <span style={{ color: PRIORITY_COLOR[item.priority] || '#999', fontSize: 16, lineHeight: 1.2, flexShrink: 0 }}>•</span>
-                    <span>
-                      {bucketLabel && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#185FA5', background: '#E6F1FB', padding: '1px 6px', borderRadius: 8, marginRight: 6, whiteSpace: 'nowrap' }}>{bucketLabel}</span>}
-                      {item.text}
-                    </span>
-                  </p>
-                )
-              })
-            })()}
+
+            {/* Completed tasks list — last 7 days */}
+            <div style={{ ...card, padding: '14px 16px' }}>
+              <p style={{ margin: '0 0 10px', fontSize: 13, fontWeight: 600 }}>✅ Completed tasks <span style={{ fontSize: 11, fontWeight: 400, color: '#999' }}>(last 7 days)</span></p>
+              {completedTasks === null ? (
+                <p style={{ fontSize: 12, color: '#999' }}>Loading…</p>
+              ) : completedTasks.length === 0 ? (
+                <p style={{ fontSize: 12, color: '#999' }}>No completed tasks yet.</p>
+              ) : (() => {
+                const BUCKET_LABEL_MAP = Object.fromEntries([...BUCKETS].map(b => [b.id, b.label]))
+                const byDate = {}
+                completedTasks.forEach(t => {
+                  const day = t.completed_at ? new Date(t.completed_at).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Unknown date'
+                  if (!byDate[day]) byDate[day] = []
+                  byDate[day].push(t)
+                })
+                return Object.entries(byDate).map(([day, dayTasks]) => (
+                  <div key={day} style={{ marginBottom: 12 }}>
+                    <p style={{ margin: '0 0 5px', fontSize: 10.5, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{day}</p>
+                    {dayTasks.map(t => (
+                      <div key={t.id} style={{ display: 'flex', gap: 7, alignItems: 'flex-start', padding: '4px 0', borderBottom: '1px solid #f5f5f5' }}>
+                        <span style={{ color: '#22C55E', fontSize: 14, lineHeight: 1.3, flexShrink: 0 }}>✓</span>
+                        <span style={{ flex: 1 }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, color: '#555', background: '#f0f0f0', padding: '1px 5px', borderRadius: 6, marginRight: 6, whiteSpace: 'nowrap' }}>{BUCKET_LABEL_MAP[t.bucket_id] || t.bucket_id}</span>
+                          <span style={{ fontSize: 12, color: '#444', textDecoration: 'line-through', textDecorationColor: '#ccc' }}>{t.title}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              })()}
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

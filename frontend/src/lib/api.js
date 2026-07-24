@@ -8,6 +8,12 @@ export async function fetchTasks() {
   return r.json()
 }
 
+export async function fetchRecentCompleted(days = 7) {
+  const r = await fetch(`${BASE}/tasks/completed?days=${days}`)
+  if (!r.ok) return []
+  return r.json()
+}
+
 export async function createTask(rawText) {
   const r = await fetch(`${BASE}/tasks/`, {
     method: 'POST',

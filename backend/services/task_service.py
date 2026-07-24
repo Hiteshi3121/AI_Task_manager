@@ -164,6 +164,22 @@ def _resync_stale_due(rows: list[dict]) -> None:
             conn.commit()
 
 
+def list_completed_tasks(days: int = 7) -> list[dict]:
+    """Returns tasks completed within the last N days, newest first."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                select * from tasks
+                where done = true
+                  and completed_at >= now() - (%s || ' days')::interval
+                order by completed_at desc
+                """,
+                (str(days),),
+            )
+            return cur.fetchall()
+
+
 def list_tasks(bucket_id: str | None = None, done: bool | None = None) -> list[dict]:
     query = "select * from tasks"
     conditions = []
