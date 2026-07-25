@@ -9,9 +9,13 @@ jobs:
   send-brief:
     runs-on: ubuntu-latest
     steps:
+      - name: Wake up Render (free tier spin-up)
+        run: curl --silent https://ai-task-manager-udukku-backend.onrender.com/api/tasks/ --max-time 60 || true
+
       - name: Send daily brief email
         run: |
           curl -X POST https://ai-task-manager-udukku-backend.onrender.com/api/brief/send-email \
             --fail \
             --silent \
-            --show-error
+            --show-error \
+            --max-time 30
