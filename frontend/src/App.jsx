@@ -221,9 +221,12 @@ function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateTitle, bucketId
 }
 
 // ---------- Student card ----------
-function StudentCard({ student, linkedTasks, onUpdate, onDelete }) {
+function StudentCard({ student, linkedTasks, onUpdate, onDelete, onAddUpdate, onUpdateTaskTitle }) {
   const [editingProject, setEditingProject] = useState(false)
   const [projectDraft, setProjectDraft] = useState(student.current_project || '')
+  const [updateInput, setUpdateInput] = useState('')
+  const [editingTaskId, setEditingTaskId] = useState(null)
+  const [taskTitleDraft, setTaskTitleDraft] = useState('')
   const status = STATUS_BY_ID[student.status] || STATUS_BY_ID.not_started
 
   function saveProject() {
@@ -233,50 +236,72 @@ function StudentCard({ student, linkedTasks, onUpdate, onDelete }) {
     }
   }
 
+  function handleAddUpdate(e) {
+    if (e.key === 'Enter' && updateInput.trim()) {
+      onAddUpdate(student.id, updateInput.trim())
+      setUpdateInput('')
+    }
+  }
+
+  function saveTaskTitle(taskId) {
+    if (taskTitleDraft.trim()) onUpdateTaskTitle(taskId, taskTitleDraft.trim())
+    setEditingTaskId(null)
+  }
+
   return (
     <div style={{ background: '#fafafa', border: '1px solid #eee', borderRadius: 8, marginBottom: 6, overflow: 'hidden' }}>
-      {/* Header row: name + status + delete */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: linkedTasks.length > 0 ? '1px solid #f0f0f0' : 'none' }}>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, flex: 1, color: '#222' }}>{student.name}</p>
-        <select
-          value={student.status}
-          onChange={e => onUpdate(student.id, { status: e.target.value })}
-          style={{ fontSize: 10, padding: '2px 4px', borderRadius: 6, border: 'none', background: status.bg, color: status.color, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
-        >
-          {STUDENT_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-        </select>
-        <button onClick={() => { if (window.confirm(`Remove ${student.name}?`)) onDelete(student.id) }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 13, padding: '0 2px', lineHeight: 1, flexShrink: 0 }}
-          title="Delete student">✕</button>
-      </div>
-      {/* Project line */}
-      <div style={{ padding: '4px 8px 6px' }}>
+      {/* Header: Name | Project   Status ▾  ✕ */}
+      <div style={{ display: 'flex', alignItems: 'center', padding: '7px 8px', gap: 6, borderBottom: '1px solid #f0f0f0' }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#222', flexShrink: 0 }}>{student.name}</span>
+        <span style={{ color: '#e0e0e0', flexShrink: 0 }}>|</span>
         {editingProject ? (
           <input autoFocus value={projectDraft}
             onChange={e => setProjectDraft(e.target.value)}
             onBlur={saveProject}
             onKeyDown={e => { if (e.key === 'Enter') saveProject() }}
             placeholder="Set project..."
-            style={{ width: '100%', fontSize: 11, padding: '2px 4px', border: '1px solid #993556', borderRadius: 5, outline: 'none', boxSizing: 'border-box' }}
+            style={{ flex: 1, fontSize: 11, padding: '1px 4px', border: '1px solid #993556', borderRadius: 4, outline: 'none' }}
           />
         ) : (
-          <p onClick={() => { setProjectDraft(student.current_project || ''); setEditingProject(true) }}
-            style={{ margin: 0, fontSize: 11, color: student.current_project ? '#555' : '#bbb', cursor: 'pointer', fontStyle: student.current_project ? 'normal' : 'italic' }}
-            title="Click to edit project">
-            {student.current_project || 'Click to set project...'}
-          </p>
+          <span onClick={() => { setProjectDraft(student.current_project || ''); setEditingProject(true) }}
+            style={{ flex: 1, fontSize: 11, color: student.current_project ? '#555' : '#bbb', cursor: 'pointer', fontStyle: student.current_project ? 'normal' : 'italic' }}
+            title="Click to edit">
+            {student.current_project || 'Set project...'}
+          </span>
         )}
-        {/* Linked task updates */}
-        {linkedTasks.length > 0 && (
-          <div style={{ marginTop: 5, borderTop: '1px solid #f0f0f0', paddingTop: 5 }}>
-            {linkedTasks.map(t => (
-              <p key={t.id} style={{ margin: '0 0 3px', fontSize: 10.5, color: '#666', display: 'flex', gap: 5, alignItems: 'flex-start' }}>
-                <span style={{ color: '#993556', flexShrink: 0 }}>•</span>
-                <span style={{ textDecoration: t.done ? 'line-through' : 'none', color: t.done ? '#aaa' : '#666' }}>{t.title}</span>
-              </p>
-            ))}
+        <select value={student.status} onChange={e => onUpdate(student.id, { status: e.target.value })}
+          style={{ fontSize: 10, padding: '2px 4px', borderRadius: 6, border: 'none', background: status.bg, color: status.color, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}>
+          {STUDENT_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+        <button onClick={() => { if (window.confirm(`Remove ${student.name}?`)) onDelete(student.id) }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 13, padding: '0 2px', lineHeight: 1, flexShrink: 0 }}>✕</button>
+      </div>
+      {/* Updates section */}
+      <div style={{ padding: '5px 8px 6px' }}>
+        {linkedTasks.map(t => (
+          <div key={t.id} style={{ display: 'flex', gap: 5, alignItems: 'flex-start', marginBottom: 3 }}>
+            <span style={{ color: '#993556', flexShrink: 0, fontSize: 12 }}>•</span>
+            {editingTaskId === t.id ? (
+              <input autoFocus value={taskTitleDraft}
+                onChange={e => setTaskTitleDraft(e.target.value)}
+                onBlur={() => saveTaskTitle(t.id)}
+                onKeyDown={e => { if (e.key === 'Enter') saveTaskTitle(t.id) }}
+                style={{ flex: 1, fontSize: 11, border: 'none', borderBottom: '1px solid #993556', outline: 'none', background: 'transparent', padding: '0 2px' }}
+              />
+            ) : (
+              <span onClick={() => { setEditingTaskId(t.id); setTaskTitleDraft(t.title) }}
+                style={{ fontSize: 11, color: t.done ? '#bbb' : '#555', textDecoration: t.done ? 'line-through' : 'none', cursor: 'text', flex: 1 }}
+                title="Click to edit">{t.title}</span>
+            )}
           </div>
-        )}
+        ))}
+        <input
+          value={updateInput}
+          onChange={e => setUpdateInput(e.target.value)}
+          onKeyDown={handleAddUpdate}
+          placeholder="Add an update... (press Enter)"
+          style={{ width: '100%', fontSize: 11, border: 'none', borderBottom: '1px dashed #ddd', outline: 'none', background: 'transparent', padding: '3px 2px', color: '#555', boxSizing: 'border-box', marginTop: linkedTasks.length ? 4 : 0 }}
+        />
       </div>
     </div>
   )
@@ -377,7 +402,7 @@ function PersonCard({ person, onDelete, onUpdatePerson, onAddTask, onDoneTask })
 }
 
 // ---------- Bucket board ----------
-function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateTitle, onUpdateStudent, onDeleteStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket, people, taskAssignees, onUpdateAssignee, onGoToPeople }) {
+function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateTitle, onUpdateStudent, onDeleteStudent, onAddStudentUpdate, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket, people, taskAssignees, onUpdateAssignee, onGoToPeople }) {
   const placement = GRID_PLACEMENT[bucket.id] || {}
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(customLabel || bucket.label)
@@ -479,6 +504,8 @@ function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, 
                   linkedTasks={bTasks.filter(t => t.student_id === s.id)}
                   onUpdate={onUpdateStudent}
                   onDelete={onDeleteStudent}
+                  onAddUpdate={onAddStudentUpdate}
+                  onUpdateTaskTitle={onUpdateTitle}
                 />
               ))
             }
@@ -754,6 +781,15 @@ export default function App() {
     }
   }
 
+  async function handleAddStudentUpdate(studentId, title) {
+    try {
+      const task = await createManualTask('ascend_classes', title, null, studentId)
+      setTasks(prev => [task, ...prev])
+    } catch {
+      setError('Could not add update.')
+    }
+  }
+
   function handleSaveBucketLabel(bucketId, label) {
     const updated = { ...bucketLabels, [bucketId]: label }
     setBucketLabels(updated)
@@ -871,6 +907,7 @@ export default function App() {
     onUpdateTitle: handleUpdateTitle,
     onUpdateStudent: handleUpdateStudent,
     onDeleteStudent: handleDeleteStudent,
+    onAddStudentUpdate: handleAddStudentUpdate,
     newStudentName, setNewStudentName, addingStudent, onAddStudent: handleAddStudent,
     onSaveLabel: handleSaveBucketLabel, customLabel: undefined,
     onAddManualTask: handleAddManualTask,

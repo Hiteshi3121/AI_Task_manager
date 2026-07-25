@@ -83,6 +83,7 @@ Rules:
 - due: infer from words like today, tomorrow, Friday, this week, next month
 - person_name and student_name are mutually exclusive — a task is about a team member OR a student, not both
 - Only set person_name/student_name if the task text actually names them or clearly refers to them
+- CRITICAL: if the task mentions ANY of the known students by name, you MUST set bucket_id to "ascend_classes" and set student_name to that student's exact name — never route student tasks to udukku or any other bucket
 - calendar_event: only set this if the task explicitly mentions scheduling a meeting, call, session, or event at a specific time — never infer a time that isn't mentioned; if no time is given, set calendar_event to null
 - For calendar_event dates: "today" means {today_str}; resolve relative days (tomorrow, Friday) against today's date
 

@@ -58,11 +58,12 @@ class ManualTaskCreate(BaseModel):
     bucket_id: str
     title: str
     person_id: int | None = None
+    student_id: int | None = None
 
 @router.post("/manual")
 async def create_manual(payload: ManualTaskCreate):
     try:
-        return task_service.create_manual_task(payload.bucket_id, payload.title.strip(), payload.person_id)
+        return task_service.create_manual_task(payload.bucket_id, payload.title.strip(), payload.person_id, payload.student_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not save task: {e}")
 

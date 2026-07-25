@@ -172,11 +172,11 @@ export async function createPersonTask(rawText, personId) {
   return r.json()
 }
 
-export async function createManualTask(bucketId, title, personId = null) {
+export async function createManualTask(bucketId, title, personId = null, studentId = null) {
   const r = await fetch(`${BASE}/tasks/manual`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bucket_id: bucketId, title, person_id: personId }),
+    body: JSON.stringify({ bucket_id: bucketId, title, person_id: personId, student_id: studentId }),
   })
   if (!r.ok) throw new Error('Failed to create task')
   return r.json()
