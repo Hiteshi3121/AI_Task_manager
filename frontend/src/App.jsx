@@ -9,7 +9,7 @@ const BUCKETS = [
   { id: 'music',          label: 'My Music',                           color: '#534AB7', bg: '#EEEDFE' },
   { id: 'social_brand',   label: 'My Social Media',                    color: '#854F0B', bg: '#FAEEDA' },
   { id: 'fitness',        label: 'Fitness — Hyrox Prep',               color: '#993C1D', bg: '#FAECE7' },
-  { id: 'personal',       label: 'Personal / Errands',                 color: '#555555', bg: '#EFEFEF' },
+  { id: 'personal',       label: 'Miscellaneous',                      color: '#555555', bg: '#EFEFEF' },
 ]
 
 // Placement in the 3x3 grid around the centered capture bar.

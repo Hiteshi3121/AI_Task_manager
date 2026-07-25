@@ -20,7 +20,7 @@ BUCKETS = {
     "music": "My Music — Ishita's own music career",
     "social_brand": "My Social Media — Ishita's personal brand",
     "fitness": "Fitness — Hyrox Prep — training, diet, hair, skin",
-    "personal": "Personal / Errands — generic life admin and errands with no clear tie to the other five buckets (e.g. groceries, appointments, chores, bills)",
+    "personal": "Miscellaneous — anything that does not clearly belong to any of the other six buckets above; use this as the catch-all for unrelated or unclear tasks",
 }
 
 SUB_BUCKETS = {
