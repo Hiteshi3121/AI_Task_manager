@@ -14,6 +14,12 @@ async def transcribe_audio(file: UploadFile = File(...)):
             file=(file.filename or "audio.webm", audio_bytes, file.content_type or "audio/webm"),
             model="whisper-large-v3-turbo",
             language="en",
+            prompt=(
+                "Udukku, Ishita, Evita, Meezan, Heeral, Evani, Hiya, Sagarika, "
+                "Ascend Now, Hyrox, music room, pitch deck, carousel, partnerships, "
+                "operations, marketing, content, entrepreneurship, podcast, reel, "
+                "Instagram, Groq, Neon, Netlify, Vercel, Render, AI task manager"
+            ),
         )
         return {"text": result.text}
     except Exception as e:

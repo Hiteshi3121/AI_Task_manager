@@ -548,7 +548,7 @@ export default function App() {
       mediaRecorderRef.current = mr
       setError('')
       setIsRecording(true)
-      mr.start()
+      mr.start(1000)
     } catch {
       setError('Could not access microphone — check browser permissions.')
     }
