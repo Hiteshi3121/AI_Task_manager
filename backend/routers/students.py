@@ -26,6 +26,12 @@ async def update(student_id: int, payload: StudentUpdate):
     return result
 
 
+@router.delete("/{student_id}")
+async def delete(student_id: int):
+    student_service.delete_student(student_id)
+    return {"deleted": student_id}
+
+
 @router.get("/{student_id}/tasks")
 async def student_tasks(student_id: int):
     return student_service.get_tasks_for_student(student_id)

@@ -54,6 +54,13 @@ def update_student(student_id: int, updates: dict) -> dict | None:
             return cur.fetchone()
 
 
+def delete_student(student_id: int) -> None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("delete from students where id = %s", (student_id,))
+            conn.commit()
+
+
 def get_tasks_for_student(student_id: int) -> list[dict]:
     """Any specific to-dos tied to this student, separate from their standing project status."""
     with get_connection() as conn:

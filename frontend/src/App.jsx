@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts'
-import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, fetchBrief, fetchPeople, createPerson, updatePerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, createPersonTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB, fetchRecentCompleted } from './lib/api'
+import { fetchTasks, createTask, updateTask, deleteTask, fetchStudents, createStudent, updateStudent, deleteStudent, fetchBrief, fetchPeople, createPerson, updatePerson, deletePerson, fetchCalendarStatus, openCalendarAuth, disconnectCalendar, fetchAnalytics, transcribeAudio, createManualTask, createPersonTask, fetchCustomBuckets, createBucketInDB, deleteBucketFromDB, fetchRecentCompleted } from './lib/api'
 
 const BUCKETS = [
   { id: 'udukku',         label: 'Udukku',                            color: '#185FA5', bg: '#E6F1FB' },
@@ -220,51 +220,64 @@ function TaskCard({ task, onDone, onDelete, onUpdateDue, onUpdateTitle, bucketId
   )
 }
 
-// ---------- Student roster card ----------
-function StudentRow({ student, onUpdate }) {
+// ---------- Student card ----------
+function StudentCard({ student, linkedTasks, onUpdate, onDelete }) {
   const [editingProject, setEditingProject] = useState(false)
   const [projectDraft, setProjectDraft] = useState(student.current_project || '')
   const status = STATUS_BY_ID[student.status] || STATUS_BY_ID.not_started
 
   function saveProject() {
     setEditingProject(false)
-    if (projectDraft !== (student.current_project || '')) {
-      onUpdate(student.id, { current_project: projectDraft || null })
+    if (projectDraft.trim() !== (student.current_project || '')) {
+      onUpdate(student.id, { current_project: projectDraft.trim() || null })
     }
   }
 
   return (
-    <div style={{ padding: '6px 8px', background: '#fafafa', borderRadius: 8, marginBottom: 6 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-        <p style={{ margin: 0, fontSize: 12, fontWeight: 600 }}>{student.name}</p>
+    <div style={{ background: '#fafafa', border: '1px solid #eee', borderRadius: 8, marginBottom: 6, overflow: 'hidden' }}>
+      {/* Header row: name + status + delete */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: linkedTasks.length > 0 ? '1px solid #f0f0f0' : 'none' }}>
+        <p style={{ margin: 0, fontSize: 12, fontWeight: 700, flex: 1, color: '#222' }}>{student.name}</p>
         <select
           value={student.status}
           onChange={e => onUpdate(student.id, { status: e.target.value })}
-          style={{ fontSize: 10, padding: '2px 4px', borderRadius: 6, border: 'none', background: status.bg, color: status.color, fontWeight: 600, cursor: 'pointer' }}
+          style={{ fontSize: 10, padding: '2px 4px', borderRadius: 6, border: 'none', background: status.bg, color: status.color, fontWeight: 600, cursor: 'pointer', flexShrink: 0 }}
         >
           {STUDENT_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
+        <button onClick={() => { if (window.confirm(`Remove ${student.name}?`)) onDelete(student.id) }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 13, padding: '0 2px', lineHeight: 1, flexShrink: 0 }}
+          title="Delete student">✕</button>
       </div>
-      {editingProject ? (
-        <input
-          autoFocus
-          value={projectDraft}
-          onChange={e => setProjectDraft(e.target.value)}
-          onBlur={saveProject}
-          onKeyDown={e => { if (e.key === 'Enter') saveProject() }}
-          placeholder="Set project..."
-          style={{ width: '100%', fontSize: 11, padding: '3px 5px', marginTop: 3, border: '1px solid #ddd', borderRadius: 5, outline: 'none' }}
-        />
-      ) : (
-        <p
-          onClick={() => setEditingProject(true)}
-          style={{ margin: '2px 0 0', fontSize: 11, color: student.current_project ? '#666' : '#aaa', cursor: 'pointer' }}
-          title="Click to edit"
-        >
-          {student.current_project || 'Click to set project...'}
-        </p>
-      )}
-      {student.next_follow_up && <p style={{ margin: '2px 0 0', fontSize: 11, color: '#999' }}>Next: {student.next_follow_up}</p>}
+      {/* Project line */}
+      <div style={{ padding: '4px 8px 6px' }}>
+        {editingProject ? (
+          <input autoFocus value={projectDraft}
+            onChange={e => setProjectDraft(e.target.value)}
+            onBlur={saveProject}
+            onKeyDown={e => { if (e.key === 'Enter') saveProject() }}
+            placeholder="Set project..."
+            style={{ width: '100%', fontSize: 11, padding: '2px 4px', border: '1px solid #993556', borderRadius: 5, outline: 'none', boxSizing: 'border-box' }}
+          />
+        ) : (
+          <p onClick={() => { setProjectDraft(student.current_project || ''); setEditingProject(true) }}
+            style={{ margin: 0, fontSize: 11, color: student.current_project ? '#555' : '#bbb', cursor: 'pointer', fontStyle: student.current_project ? 'normal' : 'italic' }}
+            title="Click to edit project">
+            {student.current_project || 'Click to set project...'}
+          </p>
+        )}
+        {/* Linked task updates */}
+        {linkedTasks.length > 0 && (
+          <div style={{ marginTop: 5, borderTop: '1px solid #f0f0f0', paddingTop: 5 }}>
+            {linkedTasks.map(t => (
+              <p key={t.id} style={{ margin: '0 0 3px', fontSize: 10.5, color: '#666', display: 'flex', gap: 5, alignItems: 'flex-start' }}>
+                <span style={{ color: '#993556', flexShrink: 0 }}>•</span>
+                <span style={{ textDecoration: t.done ? 'line-through' : 'none', color: t.done ? '#aaa' : '#666' }}>{t.title}</span>
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -364,7 +377,7 @@ function PersonCard({ person, onDelete, onUpdatePerson, onAddTask, onDoneTask })
 }
 
 // ---------- Bucket board ----------
-function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateTitle, onUpdateStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket, people, taskAssignees, onUpdateAssignee, onGoToPeople }) {
+function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, onUpdateTitle, onUpdateStudent, onDeleteStudent, newStudentName, setNewStudentName, addingStudent, onAddStudent, customLabel, onSaveLabel, onAddManualTask, onDeleteBucket, people, taskAssignees, onUpdateAssignee, onGoToPeople }) {
   const placement = GRID_PLACEMENT[bucket.id] || {}
   const [editingLabel, setEditingLabel] = useState(false)
   const [labelDraft, setLabelDraft] = useState(customLabel || bucket.label)
@@ -446,30 +459,41 @@ function BucketBoard({ bucket, bTasks, students, onDone, onDelete, onUpdateDue, 
         )}
         {bucket.id === 'ascend_classes' && (
           <div style={{ marginBottom: 8 }}>
-            {students.length === 0 ? (
-              <p style={{ fontSize: 11, color: '#aaa', padding: '4px 4px' }}>No students yet</p>
-            ) : students.map(s => (
-              <StudentRow key={s.id} student={s} onUpdate={onUpdateStudent} />
-            ))}
-            <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+            {/* Add student form — at top */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
               <input
                 value={newStudentName}
                 onChange={e => setNewStudentName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') onAddStudent() }}
-                placeholder="Add student name..."
+                placeholder="Student name..."
                 style={{ flex: 1, fontSize: 11, padding: '5px 7px', border: '1px solid #e5e5e5', borderRadius: 6, outline: 'none' }}
               />
-              <button onClick={onAddStudent} disabled={addingStudent || !newStudentName.trim()} style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: 'none', background: '#993556', color: 'white', cursor: 'pointer' }}>+</button>
+              <button onClick={onAddStudent} disabled={addingStudent || !newStudentName.trim()}
+                style={{ fontSize: 11, padding: '5px 10px', borderRadius: 6, border: 'none', background: '#993556', color: 'white', cursor: 'pointer', fontWeight: 600 }}>+ Add</button>
             </div>
+            {/* Student cards */}
+            {students.length === 0
+              ? <p style={{ fontSize: 11, color: '#aaa', padding: '4px 4px' }}>No students yet — add one above</p>
+              : students.map(s => (
+                <StudentCard key={s.id} student={s}
+                  linkedTasks={bTasks.filter(t => t.student_id === s.id)}
+                  onUpdate={onUpdateStudent}
+                  onDelete={onDeleteStudent}
+                />
+              ))
+            }
           </div>
         )}
 
-        {bTasks.length === 0 ? (
-          <p style={{ fontSize: 11, color: '#aaa', textAlign: 'center', padding: '8px 0' }}>Nothing here</p>
-        ) : bTasks.map(task => (
-          <TaskCard key={task.id} task={task} onDone={onDone} onDelete={onDelete} onUpdateDue={onUpdateDue} onUpdateTitle={onUpdateTitle}
-            bucketId={bucket.id} people={people} assignee={taskAssignees?.[task.id]} onUpdateAssignee={onUpdateAssignee} />
-        ))}
+        {(() => {
+          const visibleTasks = bucket.id === 'ascend_classes' ? bTasks.filter(t => !t.student_id) : bTasks
+          return visibleTasks.length === 0
+            ? <p style={{ fontSize: 11, color: '#aaa', textAlign: 'center', padding: '8px 0' }}>Nothing here</p>
+            : visibleTasks.map(task => (
+              <TaskCard key={task.id} task={task} onDone={onDone} onDelete={onDelete} onUpdateDue={onUpdateDue} onUpdateTitle={onUpdateTitle}
+                bucketId={bucket.id} people={people} assignee={taskAssignees?.[task.id]} onUpdateAssignee={onUpdateAssignee} />
+            ))
+        })()}
       </div>
     </div>
   )
@@ -721,6 +745,15 @@ export default function App() {
     }
   }
 
+  async function handleDeleteStudent(id) {
+    try {
+      await deleteStudent(id)
+      setStudents(prev => prev.filter(s => s.id !== id))
+    } catch {
+      setError('Could not delete student.')
+    }
+  }
+
   function handleSaveBucketLabel(bucketId, label) {
     const updated = { ...bucketLabels, [bucketId]: label }
     setBucketLabels(updated)
@@ -837,6 +870,7 @@ export default function App() {
     students, onDone: handleDone, onDelete: handleDelete, onUpdateDue: handleUpdateDue,
     onUpdateTitle: handleUpdateTitle,
     onUpdateStudent: handleUpdateStudent,
+    onDeleteStudent: handleDeleteStudent,
     newStudentName, setNewStudentName, addingStudent, onAddStudent: handleAddStudent,
     onSaveLabel: handleSaveBucketLabel, customLabel: undefined,
     onAddManualTask: handleAddManualTask,

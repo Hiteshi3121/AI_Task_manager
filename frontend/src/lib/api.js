@@ -60,6 +60,11 @@ export async function createStudent(payload) {
   return r.json()
 }
 
+export async function deleteStudent(id) {
+  const r = await fetch(`${BASE}/students/${id}`, { method: 'DELETE' })
+  if (!r.ok) throw new Error('Failed to delete student')
+}
+
 export async function updateStudent(id, patch) {
   const r = await fetch(`${BASE}/students/${id}`, {
     method: 'PATCH',
