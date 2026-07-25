@@ -11,6 +11,7 @@ from db.connection import get_connection
 from agents.classifier_agent import classify_task
 from services.due_utils import effective_due
 from services import calendar_service
+from services import cleanup_service
 
 VALID_DUE_VALUES = {"today", "this week", "upcoming", "no deadline"}
 IST = ZoneInfo("Asia/Kolkata")
@@ -79,6 +80,7 @@ def create_task(raw_text: str) -> dict:
     Full pipeline: classify the raw text, resolve any mentioned person/
     student into a real foreign key, insert the row, return it.
     """
+    cleanup_service.maybe_cleanup()
     known_students = _get_known_students()
     classified = classify_task(raw_text, known_students)
 
