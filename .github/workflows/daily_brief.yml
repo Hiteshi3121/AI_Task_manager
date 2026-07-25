@@ -2,7 +2,7 @@ name: Daily Brief Email
 
 on:
   schedule:
-    - cron: '15 9 * * *'  # 9:15 AM UTC = 2:45 PM IST (test)
+    - cron: '55 9 * * *'  # 9:55 AM UTC = 3:25 PM IST (test)
   workflow_dispatch:       # allows manual trigger from GitHub UI
 
 jobs:
