@@ -299,8 +299,8 @@ function StudentCard({ student, linkedTasks, onUpdate, onDelete, onAddUpdate, on
           value={updateInput}
           onChange={e => setUpdateInput(e.target.value)}
           onKeyDown={handleAddUpdate}
-          placeholder="Add an update... (press Enter)"
-          style={{ width: '100%', fontSize: 11, border: 'none', borderBottom: '1px dashed #ddd', outline: 'none', background: 'transparent', padding: '3px 2px', color: '#555', boxSizing: 'border-box', marginTop: linkedTasks.length ? 4 : 0 }}
+          placeholder="Add an update..."
+          style={{ width: '100%', fontSize: 10, fontStyle: 'italic', border: 'none', borderBottom: '1px dashed #ddd', outline: 'none', background: 'transparent', padding: '3px 2px', color: '#555', boxSizing: 'border-box', marginTop: linkedTasks.length ? 4 : 0 }}
         />
       </div>
     </div>

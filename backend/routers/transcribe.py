@@ -1,26 +1,51 @@
 import os
+import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from groq import Groq
 
 router = APIRouter()
+
+DEEPGRAM_API_URL = "https://api.deepgram.com/v1/listen"
+
+KEYWORDS = [
+    "Udukku", "Ishita", "Evita", "Meezan", "Heeral", "Evani", "Hiya", "Sagarika",
+    "Ascend Now", "Hyrox", "podcast", "carousel", "partnerships", "operations",
+    "marketing", "entrepreneurship", "reel", "Instagram", "pitch deck",
+]
 
 
 @router.post("/")
 async def transcribe_audio(file: UploadFile = File(...)):
     try:
         audio_bytes = await file.read()
-        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-        result = client.audio.transcriptions.create(
-            file=(file.filename or "audio.webm", audio_bytes, file.content_type or "audio/webm"),
-            model="whisper-large-v3",
-            language="en",
-            prompt=(
-                "Udukku, Ishita, Evita, Meezan, Heeral, Evani, Hiya, Sagarika, "
-                "Ascend Now, Hyrox, music room, pitch deck, carousel, partnerships, "
-                "operations, marketing, content, entrepreneurship, podcast, reel, "
-                "Instagram, Groq, Neon, Netlify, Vercel, Render, AI task manager"
-            ),
+        api_key = os.getenv("DEEPGRAM_API_KEY")
+
+        params = {
+            "model": "nova-2",
+            "language": "en",
+            "punctuate": "true",
+            "smart_format": "true",
+            "keywords": [f"{kw}:2" for kw in KEYWORDS],
+        }
+
+        headers = {
+            "Authorization": f"Token {api_key}",
+            "Content-Type": file.content_type or "audio/webm",
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                DEEPGRAM_API_URL,
+                params=params,
+                headers=headers,
+                content=audio_bytes,
+            )
+            response.raise_for_status()
+
+        transcript = (
+            response.json()
+            ["results"]["channels"][0]["alternatives"][0]["transcript"]
         )
-        return {"text": result.text}
+        return {"text": transcript}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
