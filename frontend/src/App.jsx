@@ -590,8 +590,9 @@ export default function App() {
           const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
           const { text } = await transcribeAudio(blob)
           setInput(text)
-        } catch {
-          setError('Transcription failed — check backend or mic permissions.')
+        } catch (err) {
+          setError('Transcription failed — try again or type manually.')
+          console.error('Transcription error:', err)
         } finally {
           setTranscribing(false)
         }
